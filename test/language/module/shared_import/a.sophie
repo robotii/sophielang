@@ -1,0 +1,5 @@
+// nontest
+System.print("a")
+import "shared" using Shared
+var A = "a " + Shared
+System.print("a done")

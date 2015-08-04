@@ -1,0 +1,9 @@
+var f = null
+
+new Fn {|param|
+  f = new Fn {
+    System.print(param)
+  }
+}.call("param")
+
+f.call() // expect: param

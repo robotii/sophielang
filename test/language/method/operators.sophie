@@ -1,0 +1,37 @@
+class Foo {
+  +(other) { "infix + " + other }
+  -(other) { "infix - " + other }
+  *(other) { "infix * " + other }
+  /(other) { "infix / " + other }
+  %(other) { "infix % " + other }
+  <(other) { "infix < " + other }
+  >(other) { "infix > " + other }
+  <=(other) { "infix <= " + other }
+  >=(other) { "infix >= " + other }
+  ==(other) { "infix == " + other }
+  !=(other) { "infix != " + other }
+  &(other) { "infix & " + other }
+  |(other) { "infix | " + other }
+
+  ! { "prefix !" }
+  ~ { "prefix ~" }
+  - { "prefix -" }
+}
+
+var foo = new Foo
+System.print(foo + "a") // expect: infix + a
+System.print(foo - "a") // expect: infix - a
+System.print(foo * "a") // expect: infix * a
+System.print(foo / "a") // expect: infix / a
+System.print(foo % "a") // expect: infix % a
+System.print(foo < "a") // expect: infix < a
+System.print(foo > "a") // expect: infix > a
+System.print(foo <= "a") // expect: infix <= a
+System.print(foo >= "a") // expect: infix >= a
+System.print(foo == "a") // expect: infix == a
+System.print(foo != "a") // expect: infix != a
+System.print(foo & "a") // expect: infix & a
+System.print(foo | "a") // expect: infix | a
+System.print(!foo) // expect: prefix !
+System.print(~foo) // expect: prefix ~
+System.print(-foo) // expect: prefix -

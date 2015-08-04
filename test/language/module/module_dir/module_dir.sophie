@@ -1,0 +1,3 @@
+import "something" using Index
+
+System.print(Index) // expect: index

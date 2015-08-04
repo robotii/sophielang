@@ -1,0 +1,10 @@
+class Foo {
+  static bar { new Bar }
+}
+
+class Bar {
+  static foo { new Foo }
+}
+
+System.print(Foo.bar) // expect: instance of Bar
+System.print(Bar.foo) // expect: instance of Foo

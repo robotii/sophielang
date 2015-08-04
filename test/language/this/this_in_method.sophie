@@ -1,0 +1,6 @@
+class Foo {
+  bar { this }
+  baz { "baz" }
+}
+
+System.print((new Foo).bar.baz) // expect: baz

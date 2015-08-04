@@ -1,0 +1,30 @@
+// Returns characters (as strings).
+System.print("abcd"[0]) // expect: a
+System.print("abcd"[1]) // expect: b
+System.print("abcd"[2]) // expect: c
+System.print("abcd"[3]) // expect: d
+
+// Allows indexing backwards from the end.
+System.print("abcd"[-4]) // expect: a
+System.print("abcd"[-3]) // expect: b
+System.print("abcd"[-2]) // expect: c
+System.print("abcd"[-1]) // expect: d
+
+// Regression: Make sure the string's internal buffer size is correct.
+System.print("abcd"[1] == "b") // expect: true
+
+System.print("something"[0]) // expect: s
+System.print("something"[1]) // expect: o
+System.print("something"[3]) // expect: e
+System.print("something"[6]) // expect: i
+System.print("something T"[10]) // expect: T
+System.print("something"[-1]) // expect: g
+System.print("something"[-2]) // expect: n
+System.print("something"[-4]) // expect: h
+
+// 8-bit clean.
+System.print("a\0b\0c"[0] == "a") // expect: true
+System.print("a\0b\0c"[1] == "\0") // expect: true
+System.print("a\0b\0c"[2] == "b") // expect: true
+System.print("a\0b\0c"[3] == "\0") // expect: true
+System.print("a\0b\0c"[4] == "c") // expect: true

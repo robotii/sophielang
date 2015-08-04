@@ -1,0 +1,19 @@
+class Foo {
+  new { System.print("none") }
+  new() { System.print("zero") }
+  new(a) { System.print(a) }
+  new(a, b) { System.print(a + b) }
+
+  toString { "Foo" }
+}
+
+// Can overload by arity.
+new Foo // expect: none
+new Foo() // expect: zero
+new Foo("one") // expect: one
+new Foo("one", "two") // expect: onetwo
+
+// Returns the new instance.
+var foo = new Foo // expect: none
+System.print(foo is Foo) // expect: true
+System.print(foo.toString) // expect: Foo

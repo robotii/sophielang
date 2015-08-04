@@ -1,0 +1,5 @@
+var Global = "global"
+
+new Fn {
+  System.print(Global) // expect: global
+}.call()

@@ -1,0 +1,5 @@
+class Foo {
+  bar {}
+}
+
+System.print((new Foo).bar) // expect: null

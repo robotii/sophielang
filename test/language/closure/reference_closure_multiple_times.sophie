@@ -1,0 +1,13 @@
+var f = null
+
+{
+  var a = "a"
+  f = new Fn {
+    System.print(a)
+    System.print(a)
+  }
+}
+
+f.call()
+// expect: a
+// expect: a

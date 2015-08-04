@@ -1,0 +1,6 @@
+class BadToString {
+  toString { 3 }
+}
+
+System.write(new BadToString) // expect: [invalid toString]
+System.print

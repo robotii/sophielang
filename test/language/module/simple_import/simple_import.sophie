@@ -1,0 +1,4 @@
+import "module" using Module
+// expect: ran module
+
+System.print(Module) // expect: from module

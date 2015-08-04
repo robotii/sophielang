@@ -1,0 +1,19 @@
+class Base {
+  foo {
+    System.print("Base.foo")
+  }
+}
+
+class Derived is Base {
+  bar {
+    System.print("Derived.bar")
+    super.foo
+  }
+}
+
+(new Derived).bar
+// expect: Derived.bar
+// expect: Base.foo
+
+// TODO: Super operator calls.
+// TODO: Super setter calls.

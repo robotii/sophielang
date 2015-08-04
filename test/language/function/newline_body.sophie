@@ -1,0 +1,4 @@
+var f = new Fn {
+  // Hi.
+}
+System.print(f.call()) // expect: null

@@ -1,0 +1,5 @@
+System.print(new Fn {}.arity) // expect: 0
+System.print(new Fn {|a| a}.arity) // expect: 1
+System.print(new Fn {|a, b| a}.arity) // expect: 2
+System.print(new Fn {|a, b, c| a}.arity) // expect: 3
+System.print(new Fn {|a, b, c, d| a}.arity) // expect: 4

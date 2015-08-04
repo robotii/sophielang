@@ -1,0 +1,2 @@
+class Foo {}
+System.print(!(new Foo)) // expect: false

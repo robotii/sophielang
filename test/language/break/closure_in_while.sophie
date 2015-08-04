@@ -1,0 +1,9 @@
+var f
+while (true) {
+  var i = "i"
+  f = new Fn { System.print(i) }
+  break
+}
+
+f.call()
+// expect: i

@@ -1,0 +1,2 @@
+new Fn {
+  System.print("ok") } // expect error

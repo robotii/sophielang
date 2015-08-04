@@ -1,0 +1,22 @@
+System.print(~0) // expect: -1
+System.print(~1) // expect: -2
+System.print(~23) // expect: -24
+
+// Max u32 value.
+System.print(~4294967295) // expect: -4294967296
+
+// Past max u32 value.
+System.print(~4294967296) // expect: -4294967297
+
+// Negative numbers.
+System.print(~-1) // expect: 0
+System.print(~-123) // expect: 122
+System.print(~-4294967294) // expect: 4294967293
+System.print(~-4294967295) // expect: 4294967294
+System.print(~-4294967296) // expect: 4294967295
+
+// Floating point values.
+System.print(~1.23) // expect: -2
+System.print(~0.00123) // expect: -1
+System.print(~345.67) // expect: -346
+System.print(~-12.34) // expect: 11

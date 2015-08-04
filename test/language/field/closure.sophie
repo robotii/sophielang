@@ -1,0 +1,16 @@
+class Foo {
+  new { _field = "Foo field" }
+
+  closeOverGet {
+    return new Fn { _field }
+  }
+
+  closeOverSet {
+    return new Fn { _field = "new value" }
+  }
+}
+
+var foo = new Foo
+System.print(foo.closeOverGet.call()) // expect: Foo field
+foo.closeOverSet.call()
+System.print(foo.closeOverGet.call()) // expect: new value

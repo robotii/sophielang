@@ -1,0 +1,14 @@
+class Foo {
+  static sayName {
+    System.print(Foo)
+  }
+
+  sayName {
+    System.print(Foo)
+  }
+
+  static toString { "Foo!" }
+}
+
+Foo.sayName // expect: Foo!
+(new Foo).sayName // expect: Foo!

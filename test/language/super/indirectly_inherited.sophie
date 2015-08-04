@@ -1,0 +1,18 @@
+class A {
+  foo {
+    System.print("A.foo")
+  }
+}
+
+class B is A {}
+
+class C is B {
+  foo {
+    System.print("C.foo")
+    super.foo
+  }
+}
+
+(new C).foo
+// expect: C.foo
+// expect: A.foo
