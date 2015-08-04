@@ -1,4 +1,4 @@
-## Sophie is a small scripting language written in C#
+## Sophie is a small scripting language written in C*#*
 
 The following example shows the syntax accepted 
 
