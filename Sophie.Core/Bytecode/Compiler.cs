@@ -471,7 +471,7 @@ namespace Sophie.Core.Bytecode
             string s = GetTokenString(parser);
             try
             {
-                parser.number = isHex ? Convert.ToInt32(s, 16) : Convert.ToDouble(s);
+                parser.number = isHex ? Convert.ToInt32(s, 16) : Convert.ToDouble(s, CultureInfo.InvariantCulture);
             }
             catch (OverflowException)
             {
