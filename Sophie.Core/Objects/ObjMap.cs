@@ -3,88 +3,70 @@ using Sophie.Core.VM;
 
 namespace Sophie.Core.Objects
 {
-    // A hash table mapping keys to values.
-    //
-    // We use something very simple: open addressing with linear probing. The hash
-    // table is an array of entries. Each entry is a key-value pair. If the key is
-    // the special UNDEFINED_VAL, it indicates no value is currently in that slot.
-    // Otherwise, it's a valid key, and the value is the value associated with it.
-    //
-    // When entries are added, the array is dynamically scaled by GROW_FACTOR to
-    // keep the number of filled slots under MAP_LOAD_PERCENT. Likewise, if the map
-    // gets empty enough, it will be resized to a smaller array. When this happens,
-    // all existing entries are rehashed and re-added to the new array.
-    //
-    // When an entry is removed, its slot is replaced with a "tombstone". This is an
-    // entry whose key is UNDEFINED_VAL and whose value is TRUE_VAL. When probing
-    // for a key, we will continue past tombstones, because the desired key may be
-    // found after them if the key that was removed was part of a prior collision.
-    // When the array gets resized, all tombstones are discarded.
     public class ObjMap : Obj
     {
 
         // Pointer to a contiguous array of [capacity] entries.
-        Dictionary<Container,Container> entries;
+        Dictionary<Obj, Obj> _entries;
 
         // Looks up [key] in [map]. If found, returns the value. Otherwise, returns UNDEFINED.
-        public Container Get(Container key)
+        public Obj Get(Obj key)
         {
-            Container v;
-            return entries.TryGetValue(key, out v) ? v : new Container();
+            Obj v;
+            return _entries.TryGetValue(key, out v) ? v : Undefined;
         }
 
         // Creates a new empty map.
         public ObjMap()
         {
-            entries = new Dictionary<Container, Container>(new ContainerComparer());
+            _entries = new Dictionary<Obj, Obj>(new ObjComparer());
             ClassObj = SophieVM.MapClass;
         }
 
         public int Count()
         {
-            return entries.Count;
+            return _entries.Count;
         }
 
-        public Container Get(int index)
+        public Obj Get(int index)
         {
-            if (index < 0 || index >= entries.Count)
-                return new Container();
-            Container[] v = new Container[entries.Count];
-            entries.Values.CopyTo(v, 0);
+            if (index < 0 || index >= _entries.Count)
+                return Undefined;
+            Obj[] v = new Obj[_entries.Count];
+            _entries.Values.CopyTo(v, 0);
             return v[index];
         }
 
-        public Container GetKey(int index)
+        public Obj GetKey(int index)
         {
-            if (index < 0 || index >= entries.Count)
-                return new Container();
-            Container[] v = new Container[entries.Count];
-            entries.Keys.CopyTo(v, 0);
+            if (index < 0 || index >= _entries.Count)
+                return Undefined;
+            Obj[] v = new Obj[_entries.Count];
+            _entries.Keys.CopyTo(v, 0);
             return v[index];
         }
 
         // Associates [key] with [value] in [map].
-        public void Set(Container key, Container c)
+        public void Set(Obj key, Obj c)
         {
-            entries[key] = c;
+            _entries[key] = c;
         }
 
         public void Clear()
         {
-            entries = new Dictionary<Container, Container>(new ContainerComparer());
+            _entries = new Dictionary<Obj, Obj>(new ObjComparer());
         }
 
         // Removes [key] from [map], if present. Returns the value for the key if found
         // or `NULL_VAL` otherwise.
-        public Container Remove(Container key)
+        public Obj Remove(Obj key)
         {
-            Container v;
-            if (entries.TryGetValue(key, out v))
-            {
-                entries.Remove(key);
-                return v;
-            }
-            return new Container (ContainerType.Null);
+            Obj v;
+            if (!_entries.TryGetValue(key, out v))
+                return Null;
+
+            _entries.Remove(key);
+            return v;
         }
     }
 }

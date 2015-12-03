@@ -6,57 +6,56 @@ namespace Sophie.Core.Objects
     public class ObjList : Obj
     {
         // The elements in the list.
-        readonly List<Container> elements;
+        readonly List<Obj> _elements;
 
         // Creates a new list with [numElements] elements (which are left
         // uninitialized.)
         public ObjList(int numElements)
         {
-            elements = new List<Container>(numElements);
+            _elements = new List<Obj>(numElements);
             ClassObj = SophieVM.ListClass;
         }
 
         public void Clear()
         {
-            elements.Clear();
+            _elements.Clear();
         }
 
         public int Count()
         {
-            return elements.Count;
+            return _elements.Count;
         }
 
-        public Container Get(int index)
+        public Obj Get(int index)
         {
-            return elements[index];
+            return _elements[index];
         }
 
-        public void Set(Container v, int index)
+        public void Set(Obj v, int index)
         {
-            elements[index] = v;
+            _elements[index] = v;
         }
 
         // Inserts [value] in [list] at [index], shifting down the other elements.
-        public void Insert(Container c, int index)
+        public void Insert(Obj c, int index)
         {
-            elements.Insert(index, c);
+            _elements.Insert(index, c);
         }
 
-        public void Add(Container v)
+        public void Add(Obj v)
         {
-            elements.Add(v);
+            _elements.Add(v);
         }
 
         // Removes and returns the item at [index] from [list].
-        public Container RemoveAt(int index)
+        public Obj RemoveAt(int index)
         {
-            if (elements.Count > index)
-            {
-                Container v = elements[index];
-                elements.RemoveAt(index);
-                return v;
-            }
-            return new Container (ContainerType.Null);
+            if (_elements.Count <= index)
+                return Null;
+
+            Obj v = _elements[index];
+            _elements.RemoveAt(index);
+            return v;
         }
 
     }

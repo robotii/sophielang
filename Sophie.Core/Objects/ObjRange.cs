@@ -2,7 +2,7 @@
 
 namespace Sophie.Core.Objects
 {
-    public class ObjRange : Obj
+    public sealed class ObjRange : Obj
     {
         // The beginning of the range.
 
@@ -17,7 +17,6 @@ namespace Sophie.Core.Objects
             To = to;
             IsInclusive = isInclusive;
             ClassObj = SophieVM.RangeClass;
-            Type = ObjType.Range;
         }
 
         public readonly double From;

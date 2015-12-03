@@ -3,9 +3,9 @@ using Sophie.Core.VM;
 
 namespace Sophie.Core.Objects
 {
-    public class ObjFiber : Obj
+    public sealed class ObjFiber : Obj
     {
-        internal Container[] Stack;
+        internal Obj[] Stack;
 
         public List<CallFrame> Frames;
 
@@ -58,7 +58,7 @@ namespace Sophie.Core.Objects
         // Resets [fiber] back to an initial state where it is ready to invoke [fn].
         private void ResetFiber(Obj fn)
         {
-            Stack = new Container[InitialStackSize];
+            Stack = new Obj[InitialStackSize];
             Capacity = InitialStackSize;
             Frames = new List<CallFrame>();
 
@@ -70,11 +70,11 @@ namespace Sophie.Core.Objects
             Error = null;
             CallerIsTrying = false;
 
-            CallFrame frame = new CallFrame { fn = fn, StackStart = 0, ip = 0 };
+            CallFrame frame = new CallFrame { Fn = fn, StackStart = 0, Ip = 0 };
             Frames.Add(frame);
         }
 
-        public Container GetReceiver(int numArgs)
+        public Obj GetReceiver(int numArgs)
         {
             return Stack[StackTop - numArgs];
         }
@@ -94,12 +94,12 @@ namespace Sophie.Core.Objects
         // ensure that multiple closures closing over the same variable actually see
         // the same variable.) Otherwise, it will create a new open upvalue and add it
         // the fiber's list of upvalues.
-        public ObjUpvalue CaptureUpvalue(Container local)
+        public ObjUpvalue CaptureUpvalue(int index)
         {
             // If there are no open upvalues at all, we must need a new one.
             if (OpenUpvalues == null)
             {
-                OpenUpvalues = new ObjUpvalue(local);
+                OpenUpvalues = new ObjUpvalue(Stack[index], index);
                 return OpenUpvalues;
             }
 
@@ -108,19 +108,19 @@ namespace Sophie.Core.Objects
 
             // Walk towards the bottom of the stack until we find a previously existing
             // upvalue or pass where it should be.
-            while (upvalue != null && upvalue.Container != local)
+            while (upvalue != null && upvalue.Index > index)
             {
                 prevUpvalue = upvalue;
                 upvalue = upvalue.Next;
             }
 
             // Found an existing upvalue for this local.
-            if (upvalue != null && upvalue.Container == local) return upvalue;
+            if (upvalue != null && upvalue.Index == index) return upvalue;
 
             // We've walked past this local on the stack, so there must not be an
             // upvalue for it already. Make a new one and link it in in the right
             // place to keep the list sorted.
-            ObjUpvalue createdUpvalue = new ObjUpvalue(local);
+            ObjUpvalue createdUpvalue = new ObjUpvalue(Stack[index], index);
             if (prevUpvalue == null)
             {
                 // The new one is the first one in the list.
@@ -140,13 +140,11 @@ namespace Sophie.Core.Objects
             if (OpenUpvalues == null)
                 return;
 
-            ObjUpvalue upvalue = OpenUpvalues;
-
-            // Move the value into the upvalue itself and point the upvalue to it.
-            upvalue.Container = new Container(upvalue.Container);
+            // Push the value back into the stack
+            Stack[OpenUpvalues.Index] = OpenUpvalues.Container;
 
             // Remove it from the open upvalue list.
-            OpenUpvalues = upvalue.Next;
+            OpenUpvalues = OpenUpvalues.Next;
         }
 
         // Puts [fiber] into a runtime failed state because of [error].
@@ -154,12 +152,10 @@ namespace Sophie.Core.Objects
         // Returns the fiber that should receive the error or `NULL` if no fiber
         // caught it.
 
-        public ObjFiber RuntimeError(Container error)
+        public ObjFiber RuntimeError(Obj error)
         {
-            //ASSERT(fiber->error == NULL, "Can only fail once.");
-
             // Store the error in the fiber so it can be accessed later.
-            Error = error.Obj as ObjString;
+            Error = error as ObjString;
 
             // If the caller ran this fiber using "try", give it the error.
             if (CallerIsTrying)
@@ -180,23 +176,23 @@ namespace Sophie.Core.Objects
         // [function] can be an `ObjFn` or `ObjClosure`.
         public void CallFunction(Obj function, int numArgs)
         {
-            CallFrame frame = new CallFrame { fn = function, StackStart = StackTop - numArgs, ip = 0 };
+            CallFrame frame = new CallFrame { Fn = function, StackStart = StackTop - numArgs, Ip = 0 };
             Frames.Add(frame);
             NumFrames++;
         }
 
-        public Container Return()
+        public Obj Return()
         {
             Frames.RemoveAt(--NumFrames);
             return Pop();
         }
 
-        public void SetReturnValue(Container v)
+        public void SetReturnValue(Obj v)
         {
             Stack[StackTop - 1] = v;
         }
 
-        public void Push(Container c)
+        public void Push(Obj c)
         {
             if (StackTop >= Capacity)
                 IncreaseStack();
@@ -208,7 +204,7 @@ namespace Sophie.Core.Objects
             Push(Stack[StackTop - 1]);
         }
 
-        public Container Pop()
+        public Obj Pop()
         {
             return Stack[--StackTop];
         }
@@ -218,38 +214,38 @@ namespace Sophie.Core.Objects
             StackTop--;
         }
 
-        public Container Peek()
+        public Obj Peek()
         {
             return Stack[StackTop - 1];
         }
 
-        public Container Peek2()
+        public Obj Peek2()
         {
             return Stack[StackTop - 2];
         }
 
-        public void StoreValue(int index, Container v)
+        public void StoreValue(int index, Obj v)
         {
-            Stack[StackTop + index] = new Container(v);
+            Stack[StackTop + index] = v;
         }
 
-        public Container[] IncreaseStack()
+        public Obj[] IncreaseStack()
         {
-            Container[] v = new Container[Capacity * 2];
+            Obj[] v = new Obj[Capacity * 2];
             Stack.CopyTo(v, 0);
             Stack = v;
             return Stack;
         }
     }
 
-    public class CallFrame
+    public sealed class CallFrame
     {
         // Pointer to the current (really next-to-be-executed) instruction in the
         // function's bytecode.
-        public int ip;
+        public int Ip;
 
         // The function or closure being executed.
-        public Obj fn;
+        public Obj Fn;
 
         // Pointer to the first stack slot used by this call frame. This will contain
         // the receiver, followed by the function's parameters, then local variables

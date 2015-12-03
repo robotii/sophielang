@@ -3,7 +3,7 @@ using Sophie.Core.VM;
 
 namespace Sophie.Core.Objects
 {
-    public class ObjClass : Obj
+    public sealed class ObjClass : Obj
     {
         private const int InitialMethodSize = 256;
 
@@ -11,7 +11,7 @@ namespace Sophie.Core.Objects
 
         public int NumFields;
 
-        public ObjString Name;
+        public readonly ObjString Name;
 
         public Method[] Methods;
 
@@ -110,7 +110,7 @@ namespace Sophie.Core.Objects
 
     };
 
-    public delegate PrimitiveResult Primitive(SophieVM vm, ObjFiber fiber, Container[] args);
+    public delegate PrimitiveResult Primitive(SophieVM vm, Obj[] stack, int argStart);
 
     public enum MethodType
     {
@@ -124,18 +124,21 @@ namespace Sophie.Core.Objects
         // No method for the given symbol.
         None,
 
-        Static
+        Static,
+
+        // Special call type
+        Call
     };
 
-    public class Method : Obj
+    public sealed class Method : Obj
     {
-        public MethodType mType;
+        public MethodType MType;
 
         // The method function itself. The [type] determines which field of the union
         // is used.
-        public Primitive primitive;
+        public Primitive Primitive;
 
         // May be a [ObjFn] or [ObjClosure].
-        public Obj obj;
+        public Obj Obj;
     } ;
 }

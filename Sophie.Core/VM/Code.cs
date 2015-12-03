@@ -9,135 +9,135 @@
     internal enum Instruction
     {
         // Pushes the value in the given local slot.
-        LOAD_LOCAL_0 = 0,
-        LOAD_LOCAL_1 = 1,
-        LOAD_LOCAL_2 = 2,
-        LOAD_LOCAL_3 = 3,
-        LOAD_LOCAL_4 = 4,
-        LOAD_LOCAL_5 = 5,
-        LOAD_LOCAL_6 = 6,
-        LOAD_LOCAL_7 = 7,
-        LOAD_LOCAL_8 = 8,
+        LoadLocal0 = 0,
+        LoadLocal1 = 1,
+        LoadLocal2 = 2,
+        LoadLocal3 = 3,
+        LoadLocal4 = 4,
+        LoadLocal5 = 5,
+        LoadLocal6 = 6,
+        LoadLocal7 = 7,
+        LoadLocal8 = 8,
 
         // Load the constant at index [arg].
-        CONSTANT,
-        NULL,
+        Constant,
+        Null,
 
         // Push false onto the stack.
-        FALSE,
+        False,
 
         // Push true onto the stack.
-        TRUE,
+        True,
 
         // Note: The compiler assumes the following _STORE instructions always
         // immediately follow their corresponding _LOAD ones.
 
         // Pushes the value in local slot [arg].
-        LOAD_LOCAL,
+        LoadLocal,
 
         // Stores the top of stack in local slot [arg]. Does not pop it.
-        STORE_LOCAL,
+        StoreLocal,
 
         // Pushes the value in upvalue [arg].
-        LOAD_UPVALUE,
+        LoadUpvalue,
 
         // Stores the top of stack in upvalue [arg]. Does not pop it.
-        STORE_UPVALUE,
+        StoreUpvalue,
 
         // Pushes the value of the top-level variable in slot [arg].
-        LOAD_MODULE_VAR,
+        LoadModuleVar,
 
         // Stores the top of stack in top-level variable slot [arg]. Does not pop it.
-        STORE_MODULE_VAR,
+        StoreModuleVar,
 
         // Pushes the value of the field in slot [arg] of the receiver of the current
         // function. This is used for regular field accesses on "this" directly in
         // methods. This instruction is faster than the more general CODE_LOAD_FIELD
         // instruction.
-        LOAD_FIELD_THIS,
+        LoadFieldThis,
 
         // Stores the top of the stack in field slot [arg] in the receiver of the
         // current value. Does not pop the value. This instruction is faster than the
         // more general CODE_LOAD_FIELD instruction.
-        STORE_FIELD_THIS,
+        StoreFieldThis,
 
         // Pops an instance and pushes the value of the field in slot [arg] of it.
-        LOAD_FIELD,
+        LoadField,
 
         // Pops an instance and stores the subsequent top of stack in field slot
         // [arg] in it. Does not pop the value.
-        STORE_FIELD,
+        StoreField,
 
         // Pop and discard the top of stack.
-        POP,
+        Pop,
 
         // Push a copy of the value currently on the top of the stack.
-        DUP,
+        Dup,
 
         // Invoke the method with symbol [arg]. The number indicates the number of
         // arguments (not including the receiver,.
-        CALL_0 = 65,
-        CALL_1 = 66,
-        CALL_2 = 67,
-        CALL_3 = 68,
-        CALL_4 = 69,
-        CALL_5 = 70,
-        CALL_6 = 71,
-        CALL_7 = 72,
-        CALL_8 = 73,
-        CALL_9 = 74,
-        CALL_10 = 75,
-        CALL_11 = 76,
-        CALL_12 = 77,
-        CALL_13 = 78,
-        CALL_14 = 79,
-        CALL_15 = 80,
-        CALL_16 = 81,
+        Call0 = 65,
+        Call1 = 66,
+        Call2 = 67,
+        Call3 = 68,
+        Call4 = 69,
+        Call5 = 70,
+        Call6 = 71,
+        Call7 = 72,
+        Call8 = 73,
+        Call9 = 74,
+        Call10 = 75,
+        Call11 = 76,
+        Call12 = 77,
+        Call13 = 78,
+        Call14 = 79,
+        Call15 = 80,
+        Call16 = 81,
 
         // Invoke a superclass method with symbol [arg]. The number indicates the
         // number of arguments (not including the receiver,.
-        SUPER_0 = 129,
-        SUPER_1 = 130,
-        SUPER_2 = 131,
-        SUPER_3 = 132,
-        SUPER_4 = 133,
-        SUPER_5 = 134,
-        SUPER_6 = 135,
-        SUPER_7 = 136,
-        SUPER_8 = 137,
-        SUPER_9 = 138,
-        SUPER_10 = 139,
-        SUPER_11 = 140,
-        SUPER_12 = 141,
-        SUPER_13 = 142,
-        SUPER_14 = 143,
-        SUPER_15 = 144,
-        SUPER_16 = 145,
+        Super0 = 129,
+        Super1 = 130,
+        Super2 = 131,
+        Super3 = 132,
+        Super4 = 133,
+        Super5 = 134,
+        Super6 = 135,
+        Super7 = 136,
+        Super8 = 137,
+        Super9 = 138,
+        Super10 = 139,
+        Super11 = 140,
+        Super12 = 141,
+        Super13 = 142,
+        Super14 = 143,
+        Super15 = 144,
+        Super16 = 145,
 
         // Jump the instruction pointer [arg] forward.
-        JUMP,
+        Jump,
 
         // Jump the instruction pointer [arg] backward. Pop and discard the top of
         // the stack.
-        LOOP,
+        Loop,
 
         // Pop and if not truthy then jump the instruction pointer [arg] forward.
-        JUMP_IF,
+        JumpIf,
 
         // If the top of the stack is false, jump [arg] forward. Otherwise, pop and
         // continue.
-        AND,
+        And,
 
         // If the top of the stack is non-false, jump [arg] forward. Otherwise, pop
         // and continue.
-        OR,
+        Or,
 
         // Close the upvalue for the local on the top of the stack, then pop it.
-        CLOSE_UPVALUE,
+        CloseUpvalue,
 
         // Exit from the current function and return the value on the top of the
         // stack.
-        RETURN,
+        Return,
 
         // Creates a closure for the function stored at [arg] in the constant table.
         //
@@ -147,36 +147,36 @@
         // upvalue being captured.
         //
         // Pushes the created closure.
-        CLOSURE,
+        Closure,
 
         // Creates a class. Top of stack is the superclass, or `null` if the class
         // inherits Object. Below that is a string for the name of the class. Byte
         // [arg] is the number of fields in the class.
-        CLASS,
+        Class,
 
         // Define a method for symbol [arg]. The class receiving the method is popped
         // off the stack, then the function defining the body is popped.
-        METHOD_INSTANCE,
+        MethodInstance,
 
         // Define a method for symbol [arg]. The class whose metaclass will receive
         // the method is popped off the stack, then the function defining the body is
         // popped.
-        METHOD_STATIC,
+        MethodStatic,
 
         // Load the module whose name is stored in string constant [arg]. Pushes
         // NULL onto the stack. If the module has already been loaded, does nothing
         // else. Otherwise, it creates a fiber to run the desired module and switches
         // to that. When that fiber is done, the current one is resumed.
-        LOAD_MODULE,
+        LoadModule,
 
         // Reads a top-level variable from another module. [arg1] is a string
         // constant for the name of the module, and [arg2] is a string constant for
         // the variable name. Pushes the variable if found, or generates a runtime
         // error otherwise.
-        IMPORT_VARIABLE,
+        ImportVariable,
 
         // This pseudo-instruction indicates the end of the bytecode. It should
         // always be preceded by a `CODE_RETURN`, so is never actually executed.
-        END
+        End
     };
 }

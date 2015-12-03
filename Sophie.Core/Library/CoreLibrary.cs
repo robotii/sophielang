@@ -5,12 +5,12 @@ using Sophie.Core.VM;
 
 namespace Sophie.Core.Library
 {
-    class CoreLibrary
+    sealed class CoreLibrary
     {
-        private readonly SophieVM vm;
+        private readonly SophieVM _vm;
 
         // This string literal is generated automatically from core. Do not edit.
-        const string coreLibSource =
+        const string CoreLibSource =
         "class Bool {}\n"
         + "class Fiber {}\n"
         + "class Fn {}\n"
@@ -198,90 +198,83 @@ namespace Sophie.Core.Library
         + "\n"
         + "class Range is Sequence {}\n";
 
-        static PrimitiveResult prim_bool_not(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_bool_not(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(args[0].Type != ContainerType.True);
+            stack[argStart] = Obj.Bool(stack[argStart] != Obj.True);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_bool_toString(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_bool_toString(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[0].Type == ContainerType.True)
-            {
-                args[0] = new Container("true");
-            }
-            else
-            {
-                args[0] = new Container("false");
-            }
+            stack[argStart] = stack[argStart] == Obj.True ? ObjString.TrueString : ObjString.FalseString;
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_class_instantiate(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_class_instantiate(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(new ObjInstance(args[0].Obj as ObjClass));
+            stack[argStart] = new ObjInstance(stack[argStart] as ObjClass);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_class_name(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_class_name(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(((ObjClass)args[0].Obj).Name);
+            stack[argStart] = ((ObjClass)stack[argStart]).Name;
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_class_supertype(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_class_supertype(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjClass classObj = (ObjClass)args[0].Obj;
+            ObjClass classObj = (ObjClass)stack[argStart];
 
             // Object has no superclass.
             if (classObj.Superclass == null)
             {
-                args[0] = new Container (ContainerType.Null);
+                stack[argStart] = Obj.Null;
             }
             else
             {
-                args[0] = new Container(classObj.Superclass);
+                stack[argStart] = classObj.Superclass;
             }
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_fiber_instantiate(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fiber_instantiate(SophieVM vm, Obj[] stack, int argStart)
         {
             // Return the Fiber class itself. When we then call "new" on it, it will
             // create the fiber.
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_fiber_new(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fiber_new(SophieVM vm, Obj[] stack, int argStart)
         {
-            Obj o = args[1].Obj;
-            if (o.Type == ObjType.Fn || o.Type == ObjType.Closure)
+            Obj o = stack[argStart + 1];
+            if (o as ObjFn != null|| o as ObjClosure != null)
             {
                 ObjFiber newFiber = new ObjFiber(o);
 
                 // The compiler expects the first slot of a function to hold the receiver.
                 // Since a fiber's stack is invoked directly, it doesn't have one, so put it
                 // in here.
-                newFiber.Push(Container.Null);
+                newFiber.Push(Obj.Null);
 
-                args[0] = new Container(newFiber);
+                stack[argStart] = newFiber;
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Argument must be a function.");
+            stack[argStart] = Obj.MakeString("Argument must be a function.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_fiber_abort(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fiber_abort(SophieVM vm, Obj[] stack, int argStart)
         {
-            Obj o = args[1].Obj;
-            args[0] = o != null && o.Type == ObjType.String ? args[1] : new Container("Error message must be a string.");
+            Obj o = stack[argStart + 1];
+            stack[argStart] = o != null && o as ObjString != null ? stack[argStart + 1] : Obj.MakeString("Error message must be a string.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_fiber_call(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fiber_call(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjFiber runFiber = args[0].Obj as ObjFiber;
+            ObjFiber runFiber = stack[argStart] as ObjFiber;
 
             if (runFiber != null)
             {
@@ -289,32 +282,32 @@ namespace Sophie.Core.Library
                 {
                     if (runFiber.Caller == null)
                     {
-                        runFiber.Caller = fiber;
+                        runFiber.Caller = vm.Fiber;
 
                         // If the fiber was yielded, make the yield call return null.
                         if (runFiber.StackTop > 0)
                         {
-                            runFiber.StoreValue(-1, new Container (ContainerType.Null));
+                            runFiber.StoreValue(-1, Obj.Null);
                         }
 
                         return PrimitiveResult.RunFiber;
                     }
 
                     // Remember who ran it.
-                    args[0] = new Container("Fiber has already been called.");
+                    stack[argStart] = Obj.MakeString("Fiber has already been called.");
                     return PrimitiveResult.Error;
                 }
-                args[0] = new Container("Cannot call a finished fiber.");
+                stack[argStart] = Obj.MakeString("Cannot call a finished fiber.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container("Trying to call a non-fiber");
+            stack[argStart] = Obj.MakeString("Trying to call a non-fiber");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_fiber_call1(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fiber_call1(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjFiber runFiber = args[0].Obj as ObjFiber;
+            ObjFiber runFiber = stack[argStart] as ObjFiber;
 
             if (runFiber != null)
             {
@@ -323,64 +316,64 @@ namespace Sophie.Core.Library
                     if (runFiber.Caller == null)
                     {
                         // Remember who ran it.
-                        runFiber.Caller = fiber;
+                        runFiber.Caller = vm.Fiber;
 
                         // If the fiber was yielded, make the yield call return the value passed to
                         // run.
                         if (runFiber.StackTop > 0)
                         {
-                            runFiber.StoreValue(-1, args[1]);
+                            runFiber.StoreValue(-1, stack[argStart + 1]);
                         }
 
                         // When the calling fiber resumes, we'll store the result of the run call
                         // in its stack. Since fiber.run(value) has two arguments (the fiber and the
                         // value) and we only need one slot for the result, discard the other slot
                         // now.
-                        fiber.StackTop--;
+                        vm.Fiber.StackTop--;
 
                         return PrimitiveResult.RunFiber;
                     }
 
-                    args[0] = new Container("Fiber has already been called.");
+                    stack[argStart] = Obj.MakeString("Fiber has already been called.");
                     return PrimitiveResult.Error;
                 }
-                args[0] = new Container("Cannot call a finished fiber.");
+                stack[argStart] = Obj.MakeString("Cannot call a finished fiber.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container("Trying to call a non-fiber");
+            stack[argStart] = Obj.MakeString("Trying to call a non-fiber");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_fiber_current(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fiber_current(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(fiber);
+            stack[argStart] = vm.Fiber;
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_fiber_error(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fiber_error(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjFiber runFiber = (ObjFiber)args[0].Obj;
-            args[0] = runFiber.Error == null ? new Container (ContainerType.Null) : new Container(runFiber.Error);
+            ObjFiber runFiber = (ObjFiber)stack[argStart];
+            stack[argStart] = runFiber.Error ?? Obj.Null;
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_fiber_isDone(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fiber_isDone(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjFiber runFiber = (ObjFiber)args[0].Obj;
-            args[0] = new Container(runFiber.NumFrames == 0 || runFiber.Error != null);
+            ObjFiber runFiber = (ObjFiber)stack[argStart];
+            stack[argStart] = Obj.Bool(runFiber.NumFrames == 0 || runFiber.Error != null);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_fiber_run(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fiber_run(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjFiber runFiber = (ObjFiber)args[0].Obj;
+            ObjFiber runFiber = (ObjFiber)stack[argStart];
 
             if (runFiber.NumFrames != 0)
             {
                 if (runFiber.Caller == null && runFiber.StackTop > 0)
                 {
-                    runFiber.StoreValue(-1, new Container (ContainerType.Null));
+                    runFiber.StoreValue(-1, Obj.Null);
                 }
 
                 // Unlike run, this does not remember the calling fiber. Instead, it
@@ -388,25 +381,25 @@ namespace Sophie.Core.Library
                 // elimination. The switched-from fiber is discarded and when the switched
                 // to fiber completes or yields, control passes to the switched-from fiber's
                 // caller.
-                runFiber.Caller = fiber.Caller;
+                runFiber.Caller = vm.Fiber.Caller;
 
                 return PrimitiveResult.RunFiber;
             }
 
             // If the fiber was yielded, make the yield call return null.
-            args[0] = new Container("Cannot run a finished fiber.");
+            stack[argStart] = Obj.MakeString("Cannot run a finished fiber.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_fiber_run1(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fiber_run1(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjFiber runFiber = (ObjFiber)args[0].Obj;
+            ObjFiber runFiber = (ObjFiber)stack[argStart];
 
             if (runFiber.NumFrames != 0)
             {
                 if (runFiber.Caller == null && runFiber.StackTop > 0)
                 {
-                    runFiber.StoreValue(-1, args[1]);
+                    runFiber.StoreValue(-1, stack[argStart + 1]);
                 }
 
                 // Unlike run, this does not remember the calling fiber. Instead, it
@@ -414,132 +407,132 @@ namespace Sophie.Core.Library
                 // elimination. The switched-from fiber is discarded and when the switched
                 // to fiber completes or yields, control passes to the switched-from fiber's
                 // caller.
-                runFiber.Caller = fiber.Caller;
+                runFiber.Caller = vm.Fiber.Caller;
 
                 return PrimitiveResult.RunFiber;
             }
 
             // If the fiber was yielded, make the yield call return the value passed to
             // run.
-            args[0] = new Container("Cannot run a finished fiber.");
+            stack[argStart] = Obj.MakeString("Cannot run a finished fiber.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_fiber_try(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fiber_try(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjFiber runFiber = (ObjFiber)args[0].Obj;
+            ObjFiber runFiber = (ObjFiber)stack[argStart];
 
             if (runFiber.NumFrames != 0)
             {
                 if (runFiber.Caller == null)
                 {
-                    runFiber.Caller = fiber;
+                    runFiber.Caller = vm.Fiber;
                     runFiber.CallerIsTrying = true;
 
                     // If the fiber was yielded, make the yield call return null.
                     if (runFiber.StackTop > 0)
                     {
-                        runFiber.StoreValue(-1, new Container (ContainerType.Null));
+                        runFiber.StoreValue(-1, Obj.Null);
                     }
 
                     return PrimitiveResult.RunFiber;
                 }
 
                 // Remember who ran it.
-                args[0] = new Container("Fiber has already been called.");
+                stack[argStart] = Obj.MakeString("Fiber has already been called.");
                 return PrimitiveResult.Error;
             }
-            args[0] = new Container("Cannot try a finished fiber.");
+            stack[argStart] = Obj.MakeString("Cannot try a finished fiber.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_fiber_yield(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fiber_yield(SophieVM vm, Obj[] stack, int argStart)
         {
             // Unhook this fiber from the one that called it.
-            ObjFiber caller = fiber.Caller;
-            fiber.Caller = null;
-            fiber.CallerIsTrying = false;
+            ObjFiber caller = vm.Fiber.Caller;
+            vm.Fiber.Caller = null;
+            vm.Fiber.CallerIsTrying = false;
 
             // If we don't have any other pending fibers, jump all the way out of the
             // interpreter.
             if (caller == null)
             {
-                args[0] = new Container (ContainerType.Null);
+                stack[argStart] = Obj.Null;
             }
             else
             {
                 // Make the caller's run method return null.
-                caller.StoreValue(-1, new Container (ContainerType.Null));
+                caller.StoreValue(-1, Obj.Null);
 
                 // Return the fiber to resume.
-                args[0] = new Container(caller);
+                stack[argStart] = caller;
             }
 
             return PrimitiveResult.RunFiber;
         }
 
-        static PrimitiveResult prim_fiber_yield1(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fiber_yield1(SophieVM vm, Obj[] stack, int argStart)
         {
             // Unhook this fiber from the one that called it.
-            ObjFiber caller = fiber.Caller;
-            fiber.Caller = null;
-            fiber.CallerIsTrying = false;
+            ObjFiber caller = vm.Fiber.Caller;
+            vm.Fiber.Caller = null;
+            vm.Fiber.CallerIsTrying = false;
 
             // If we don't have any other pending fibers, jump all the way out of the
             // interpreter.
             if (caller == null)
             {
-                args[0] = new Container (ContainerType.Null);
+                stack[argStart] = Obj.Null;
             }
             else
             {
                 // Make the caller's run method return the argument passed to yield.
-                caller.StoreValue(-1, args[1]);
+                caller.StoreValue(-1, stack[argStart + 1]);
 
                 // When the yielding fiber resumes, we'll store the result of the yield call
                 // in its stack. Since Fiber.yield(value) has two arguments (the Fiber class
                 // and the value) and we only need one slot for the result, discard the other
                 // slot now.
-                fiber.StackTop--;
+                vm.Fiber.StackTop--;
 
                 // Return the fiber to resume.
-                args[0] = new Container(caller);
+                stack[argStart] = caller;
             }
 
             return PrimitiveResult.RunFiber;
         }
 
-        static PrimitiveResult prim_fn_instantiate(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fn_instantiate(SophieVM vm, Obj[] stack, int argStart)
         {
             // Return the Fn class itself. When we then call "new" on it, it will return
             // the block.
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_fn_new(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fn_new(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Obj == null || args[1].Obj.Type != ObjType.Fn && args[1].Obj.Type != ObjType.Closure)
+            if (stack[argStart + 1] == null || stack[argStart + 1] as ObjFn == null && stack[argStart + 1] as ObjClosure == null)
             {
-                args[0] = new Container("Argument must be a function.");
+                stack[argStart] = Obj.MakeString("Argument must be a function.");
                 return PrimitiveResult.Error;
             }
 
             // The block argument is already a function, so just return it.
-            args[0] = args[1];
+            stack[argStart] = stack[argStart + 1];
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_fn_arity(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fn_arity(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjFn fn = args[0].Obj as ObjFn;
-            args[0] = fn != null ? new Container(fn.Arity) : new Container(0.0);
+            ObjFn fn = stack[argStart] as ObjFn;
+            stack[argStart] = fn != null ? new Obj(fn.Arity) : new Obj(0.0);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult CallFn(Container[] args, int numArgs)
+        static PrimitiveResult CallFn(Obj[] stack, int argStart, int numArgs)
         {
-            ObjFn fn = args[0].Obj as ObjFn;
-            ObjClosure c = args[0].Obj as ObjClosure;
+            ObjFn fn = stack[argStart] as ObjFn;
+            ObjClosure c = stack[argStart] as ObjClosure;
             if (c != null)
             {
                 fn = c.Function;
@@ -552,236 +545,236 @@ namespace Sophie.Core.Library
                     return PrimitiveResult.Call;
                 }
 
-                args[0] = new Container("Function expects more arguments.");
+                stack[argStart] = Obj.MakeString("Function expects more arguments.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container("Object should be a function or closure");
+            stack[argStart] = Obj.MakeString("Object should be a function or closure");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_fn_call0(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 0); }
-        static PrimitiveResult prim_fn_call1(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 1); }
-        static PrimitiveResult prim_fn_call2(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 2); }
-        static PrimitiveResult prim_fn_call3(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 3); }
-        static PrimitiveResult prim_fn_call4(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 4); }
-        static PrimitiveResult prim_fn_call5(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 5); }
-        static PrimitiveResult prim_fn_call6(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 6); }
-        static PrimitiveResult prim_fn_call7(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 7); }
-        static PrimitiveResult prim_fn_call8(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 8); }
-        static PrimitiveResult prim_fn_call9(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 9); }
-        static PrimitiveResult prim_fn_call10(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 10); }
-        static PrimitiveResult prim_fn_call11(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 11); }
-        static PrimitiveResult prim_fn_call12(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 12); }
-        static PrimitiveResult prim_fn_call13(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 13); }
-        static PrimitiveResult prim_fn_call14(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 14); }
-        static PrimitiveResult prim_fn_call15(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 15); }
-        static PrimitiveResult prim_fn_call16(SophieVM vm, ObjFiber fiber, Container[] args) { return CallFn(args, 16); }
+        static PrimitiveResult prim_fn_call0(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 0); }
+        static PrimitiveResult prim_fn_call1(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 1); }
+        static PrimitiveResult prim_fn_call2(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 2); }
+        static PrimitiveResult prim_fn_call3(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 3); }
+        static PrimitiveResult prim_fn_call4(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 4); }
+        static PrimitiveResult prim_fn_call5(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 5); }
+        static PrimitiveResult prim_fn_call6(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 6); }
+        static PrimitiveResult prim_fn_call7(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 7); }
+        static PrimitiveResult prim_fn_call8(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 8); }
+        static PrimitiveResult prim_fn_call9(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 9); }
+        static PrimitiveResult prim_fn_call10(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 10); }
+        static PrimitiveResult prim_fn_call11(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 11); }
+        static PrimitiveResult prim_fn_call12(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 12); }
+        static PrimitiveResult prim_fn_call13(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 13); }
+        static PrimitiveResult prim_fn_call14(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 14); }
+        static PrimitiveResult prim_fn_call15(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 15); }
+        static PrimitiveResult prim_fn_call16(SophieVM vm, Obj[] stack, int argStart) { return CallFn(stack, argStart, 16); }
 
-        static PrimitiveResult prim_fn_toString(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_fn_toString(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container("<fn>");
+            stack[argStart] = Obj.MakeString("<fn>");
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_list_instantiate(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_list_instantiate(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(new ObjList(0));
+            stack[argStart] = new ObjList(0);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_list_add(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_list_add(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjList list = args[0].Obj as ObjList;
+            ObjList list = stack[argStart] as ObjList;
             if (list == null)
             {
-                args[0] = new Container("Trying to add to a non-list");
+                stack[argStart] = Obj.MakeString("Trying to add to a non-list");
                 return PrimitiveResult.Error;
             }
-            list.Add(args[1]);
-            args[0] = args[1];
+            list.Add(stack[argStart + 1]);
+            stack[argStart] = stack[argStart + 1];
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_list_clear(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_list_clear(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjList list = args[0].Obj as ObjList;
+            ObjList list = stack[argStart] as ObjList;
             if (list == null)
             {
-                args[0] = new Container("Trying to clear a non-list");
+                stack[argStart] = Obj.MakeString("Trying to clear a non-list");
                 return PrimitiveResult.Error;
             }
             list.Clear();
 
-            args[0] = new Container (ContainerType.Null);
+            stack[argStart] = Obj.Null;
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_list_count(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_list_count(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjList list = args[0].Obj as ObjList;
+            ObjList list = stack[argStart] as ObjList;
             if (list != null)
             {
-                args[0] = new Container(list.Count());
+                stack[argStart] = new Obj(list.Count());
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Trying to clear a non-list");
+            stack[argStart] = Obj.MakeString("Trying to clear a non-list");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_list_insert(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_list_insert(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjList list = args[0].Obj as ObjList;
+            ObjList list = stack[argStart] as ObjList;
             if (list != null)
             {
-                if (args[1].Type == ContainerType.Num)
+                if (stack[argStart + 1].Type == ObjType.Num)
                 {
-                    if (args[1].Num == (int)args[1].Num)
+                    if (stack[argStart + 1].Num == (int)stack[argStart + 1].Num)
                     {
-                        int index = (int)args[1].Num;
+                        int index = (int)stack[argStart + 1].Num;
 
                         if (index < 0)
                             index += list.Count() + 1;
                         if (index >= 0 && index <= list.Count())
                         {
-                            list.Insert(args[2], index);
-                            args[0] = args[2];
+                            list.Insert(stack[argStart + 2], index);
+                            stack[argStart] = stack[argStart + 2];
                             return PrimitiveResult.Value;
                         }
-                        args[0] = new Container("Index out of bounds.");
+                        stack[argStart] = Obj.MakeString("Index out of bounds.");
                         return PrimitiveResult.Error;
                     }
 
                     // count + 1 here so you can "insert" at the very end.
-                    args[0] = new Container("Index must be an integer.");
+                    stack[argStart] = Obj.MakeString("Index must be an integer.");
                     return PrimitiveResult.Error;
                 }
 
-                args[0] = new Container("Index must be a number.");
+                stack[argStart] = Obj.MakeString("Index must be a number.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container("List cannot be null");
+            stack[argStart] = Obj.MakeString("List cannot be null");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_list_iterate(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_list_iterate(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjList list = (ObjList)args[0].Obj;
+            ObjList list = (ObjList)stack[argStart];
 
             // If we're starting the iteration, return the first index.
-            if (args[1].Type == ContainerType.Null)
+            if (stack[argStart + 1] == Obj.Null)
             {
                 if (list.Count() != 0)
                 {
-                    args[0] = new Container(0.0);
+                    stack[argStart] = new Obj(0.0);
                     return PrimitiveResult.Value;
                 }
 
-                args[0] = new Container(false);
+                stack[argStart] = Obj.Bool(false);
                 return PrimitiveResult.Value;
             }
 
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                if (args[1].Num == ((int)args[1].Num))
+                if (stack[argStart + 1].Num == ((int)stack[argStart + 1].Num))
                 {
-                    double index = args[1].Num;
+                    double index = stack[argStart + 1].Num;
                     if (!(index < 0) && !(index >= list.Count() - 1))
                     {
-                        args[0] = new Container(index + 1);
+                        stack[argStart] = new Obj(index + 1);
                         return PrimitiveResult.Value;
                     }
 
                     // Otherwise, move to the next index.
-                    args[0] = new Container(false);
+                    stack[argStart] = Obj.Bool(false);
                     return PrimitiveResult.Value;
                 }
 
                 // Stop if we're out of bounds.
-                args[0] = new Container("Iterator must be an integer.");
+                stack[argStart] = Obj.MakeString("Iterator must be an integer.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container("Iterator must be a number.");
+            stack[argStart] = Obj.MakeString("Iterator must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_list_iteratorValue(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_list_iteratorValue(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjList list = (ObjList)args[0].Obj;
+            ObjList list = (ObjList)stack[argStart];
 
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                if (args[1].Num == ((int)args[1].Num))
+                if (stack[argStart + 1].Num == ((int)stack[argStart + 1].Num))
                 {
-                    int index = (int)args[1].Num;
+                    int index = (int)stack[argStart + 1].Num;
 
                     if (index >= 0 && index < list.Count())
                     {
-                        args[0] = list.Get(index);
+                        stack[argStart] = list.Get(index);
                         return PrimitiveResult.Value;
                     }
 
-                    args[0] = new Container("Iterator out of bounds.");
+                    stack[argStart] = Obj.MakeString("Iterator out of bounds.");
                     return PrimitiveResult.Error;
                 }
 
-                args[0] = new Container("Iterator must be an integer.");
+                stack[argStart] = Obj.MakeString("Iterator must be an integer.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container("Iterator must be a number.");
+            stack[argStart] = Obj.MakeString("Iterator must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_list_removeAt(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_list_removeAt(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjList list = args[0].Obj as ObjList;
+            ObjList list = stack[argStart] as ObjList;
 
             if (list != null)
             {
-                if (args[1].Type == ContainerType.Num)
+                if (stack[argStart + 1].Type == ObjType.Num)
                 {
-                    if (args[1].Num == ((int)args[1].Num))
+                    if (stack[argStart + 1].Num == ((int)stack[argStart + 1].Num))
                     {
-                        int index = (int)args[1].Num;
+                        int index = (int)stack[argStart + 1].Num;
                         if (index < 0)
                             index += list.Count();
                         if (index >= 0 && index < list.Count())
                         {
-                            args[0] = list.RemoveAt(index);
+                            stack[argStart] = list.RemoveAt(index);
                             return PrimitiveResult.Value;
                         }
 
-                        args[0] = new Container("Index out of bounds.");
+                        stack[argStart] = Obj.MakeString("Index out of bounds.");
                         return PrimitiveResult.Error;
                     }
 
-                    args[0] = new Container("Index must be an integer.");
+                    stack[argStart] = Obj.MakeString("Index must be an integer.");
                     return PrimitiveResult.Error;
                 }
 
-                args[0] = new Container("Index must be a number.");
+                stack[argStart] = Obj.MakeString("Index must be a number.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container("List cannot be null");
+            stack[argStart] = Obj.MakeString("List cannot be null");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_list_subscript(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_list_subscript(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjList list = args[0].Obj as ObjList;
+            ObjList list = stack[argStart] as ObjList;
 
             if (list == null)
                 return PrimitiveResult.Error;
 
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                int index = (int)args[1].Num;
-                if (index == args[1].Num)
+                int index = (int)stack[argStart + 1].Num;
+                if (index == stack[argStart + 1].Num)
                 {
                     if (index < 0)
                     {
@@ -789,22 +782,22 @@ namespace Sophie.Core.Library
                     }
                     if (index >= 0 && index < list.Count())
                     {
-                        args[0] = list.Get(index);
+                        stack[argStart] = list.Get(index);
                         return PrimitiveResult.Value;
                     }
 
-                    args[0] = new Container("Subscript out of bounds.");
+                    stack[argStart] = Obj.MakeString("Subscript out of bounds.");
                     return PrimitiveResult.Error;
                 }
-                args[0] = new Container("Subscript must be an integer.");
+                stack[argStart] = Obj.MakeString("Subscript must be an integer.");
                 return PrimitiveResult.Error;
             }
 
-            ObjRange r = args[1].Obj as ObjRange;
+            ObjRange r = stack[argStart + 1] as ObjRange;
 
             if (r == null)
             {
-                args[0] = new Container("Subscript must be a number or a range.");
+                stack[argStart] = Obj.MakeString("Subscript must be a number or a range.");
                 return PrimitiveResult.Error;
             }
 
@@ -812,13 +805,13 @@ namespace Sophie.Core.Library
             int from = (int)r.From;
             if (from != r.From)
             {
-                args[0] = new Container("Range start must be an integer.");
+                stack[argStart] = Obj.MakeString("Range start must be an integer.");
                 return PrimitiveResult.Error;
             }
             int to = (int)r.To;
             if (to != r.To)
             {
-                args[0] = new Container("Range end must be an integer.");
+                stack[argStart] = Obj.MakeString("Range end must be an integer.");
                 return PrimitiveResult.Error;
             }
 
@@ -845,12 +838,12 @@ namespace Sophie.Core.Library
 
             if (to < 0 || from + (count * step) > list.Count())
             {
-                args[0] = new Container("Range end out of bounds.");
+                stack[argStart] = Obj.MakeString("Range end out of bounds.");
                 return PrimitiveResult.Error;
             }
             if (from < 0 || (from >= list.Count() && from > 0))
             {
-                args[0] = new Container("Range start out of bounds.");
+                stack[argStart] = Obj.MakeString("Range start out of bounds.");
                 return PrimitiveResult.Error;
             }
 
@@ -860,18 +853,18 @@ namespace Sophie.Core.Library
                 result.Add(list.Get(from + (i * step)));
             }
 
-            args[0] = new Container(result);
+            stack[argStart] = result;
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_list_subscriptSetter(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_list_subscriptSetter(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjList list = (ObjList)args[0].Obj;
-            if (args[1].Type == ContainerType.Num)
+            ObjList list = (ObjList)stack[argStart];
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                int index = (int)args[1].Num;
+                int index = (int)stack[argStart + 1].Num;
 
-                if (index == args[1].Num)
+                if (index == stack[argStart + 1].Num)
                 {
                     if (index < 0)
                     {
@@ -880,706 +873,706 @@ namespace Sophie.Core.Library
 
                     if (list != null && index >= 0 && index < list.Count())
                     {
-                        list.Set(args[2], index);
-                        args[0] = args[2];
+                        list.Set(stack[argStart + 2], index);
+                        stack[argStart] = stack[argStart + 2];
                         return PrimitiveResult.Value;
                     }
 
-                    args[0] = new Container("Subscript out of bounds.");
+                    stack[argStart] = Obj.MakeString("Subscript out of bounds.");
                     return PrimitiveResult.Error;
                 }
 
-                args[0] = new Container("Subscript must be an integer.");
+                stack[argStart] = Obj.MakeString("Subscript must be an integer.");
                 return PrimitiveResult.Error;
             }
-            args[0] = new Container("Subscript must be a number.");
+            stack[argStart] = Obj.MakeString("Subscript must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_map_instantiate(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_map_instantiate(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(new ObjMap());
+            stack[argStart] = new ObjMap();
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_map_subscript(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_map_subscript(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjMap map = args[0].Obj as ObjMap;
+            ObjMap map = stack[argStart] as ObjMap;
 
-            if (ValidateKey(args[1]))
+            if (ValidateKey(stack[argStart + 1]))
             {
                 if (map != null)
                 {
-                    args[0] = map.Get(args[1]);
-                    if (args[0].Type == ContainerType.Undefined)
+                    stack[argStart] = map.Get(stack[argStart + 1]);
+                    if (stack[argStart] == Obj.Undefined)
                     {
-                        args[0] = new Container (ContainerType.Null);
+                        stack[argStart] = Obj.Null;
                     }
                 }
                 else
                 {
-                    args[0] = new Container (ContainerType.Null);
+                    stack[argStart] = Obj.Null;
                 }
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Key must be a value type or fiber.");
+            stack[argStart] = Obj.MakeString("Key must be a value type or fiber.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_map_subscriptSetter(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_map_subscriptSetter(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjMap map = args[0].Obj as ObjMap;
+            ObjMap map = stack[argStart] as ObjMap;
 
-            if (ValidateKey(args[1]))
+            if (ValidateKey(stack[argStart + 1]))
             {
                 if (map != null)
                 {
-                    map.Set(args[1], args[2]);
+                    map.Set(stack[argStart + 1], stack[argStart + 2]);
                 }
-                args[0] = args[2];
+                stack[argStart] = stack[argStart + 2];
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Key must be a value type or fiber.");
+            stack[argStart] = Obj.MakeString("Key must be a value type or fiber.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_map_clear(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_map_clear(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjMap m = args[0].Obj as ObjMap;
+            ObjMap m = stack[argStart] as ObjMap;
             if (m != null)
                 m.Clear();
-            args[0] = new Container (ContainerType.Null);
+            stack[argStart] = Obj.Null;
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_map_containsKey(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_map_containsKey(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjMap map = (ObjMap)args[0].Obj;
+            ObjMap map = (ObjMap)stack[argStart];
 
-            if (ValidateKey(args[1]))
+            if (ValidateKey(stack[argStart + 1]))
             {
-                Container v = map.Get(args[1]);
+                Obj v = map.Get(stack[argStart + 1]);
 
-                args[0] = new Container(v.Type != ContainerType.Undefined);
+                stack[argStart] = Obj.Bool(v != Obj.Undefined);
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Key must be a value type or fiber.");
+            stack[argStart] = Obj.MakeString("Key must be a value type or fiber.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_map_count(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_map_count(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjMap m = (ObjMap)args[0].Obj;
-            args[0] = new Container(m.Count());
+            ObjMap m = (ObjMap)stack[argStart];
+            stack[argStart] = new Obj(m.Count());
             return PrimitiveResult.Value;
         }
 
-        private static PrimitiveResult prim_map_iterate(SophieVM vm, ObjFiber fiber, Container[] args)
+        private static PrimitiveResult prim_map_iterate(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjMap map = (ObjMap)args[0].Obj;
+            ObjMap map = (ObjMap)stack[argStart];
 
             if (map.Count() == 0)
             {
-                args[0] = new Container(false);
+                stack[argStart] = Obj.Bool(false);
                 return PrimitiveResult.Value;
             }
 
             // Start one past the last entry we stopped at.
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                if (args[1].Num < 0)
+                if (stack[argStart + 1].Num < 0)
                 {
-                    args[0] = new Container(false);
+                    stack[argStart] = Obj.Bool(false);
                     return PrimitiveResult.Value;
                 }
-                int index = (int)args[1].Num;
+                int index = (int)stack[argStart + 1].Num;
 
-                if (index == args[1].Num)
+                if (index == stack[argStart + 1].Num)
                 {
-                    args[0] = index > map.Count() || map.Get(index).Type == ContainerType.Undefined ? new Container(false) : new Container(index + 1);
+                    stack[argStart] = index > map.Count() || map.Get(index) == Obj.Undefined ? Obj.Bool(false) : new Obj(index + 1);
                     return PrimitiveResult.Value;
                 }
 
-                args[0] = new Container("Iterator must be an integer.");
+                stack[argStart] = Obj.MakeString("Iterator must be an integer.");
                 return PrimitiveResult.Error;
             }
 
             // If we're starting the iteration, start at the first used entry.
-            if (args[1].Type == ContainerType.Null)
+            if (stack[argStart + 1] == Obj.Null)
             {
-                args[0] = new Container(1);
+                stack[argStart] = new Obj(1);
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Iterator must be a number.");
+            stack[argStart] = Obj.MakeString("Iterator must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_map_remove(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_map_remove(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjMap map = (ObjMap)args[0].Obj;
+            ObjMap map = (ObjMap)stack[argStart];
 
-            if (ValidateKey(args[1]))
+            if (ValidateKey(stack[argStart + 1]))
             {
-                args[0] = map != null ? map.Remove(args[1]) : new Container (ContainerType.Null);
+                stack[argStart] = map != null ? map.Remove(stack[argStart + 1]) : Obj.Null;
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Key must be a value type or fiber.");
+            stack[argStart] = Obj.MakeString("Key must be a value type or fiber.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_map_keyIteratorValue(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_map_keyIteratorValue(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjMap map = (ObjMap)args[0].Obj;
+            ObjMap map = (ObjMap)stack[argStart];
 
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                int index = (int)args[1].Num;
+                int index = (int)stack[argStart + 1].Num;
 
-                if (index == args[1].Num)
+                if (index == stack[argStart + 1].Num)
                 {
                     if (map != null && index >= 0)
                     {
-                        args[0] = map.GetKey(index - 1);
+                        stack[argStart] = map.GetKey(index - 1);
                         return PrimitiveResult.Value;
                     }
-                    args[0] = new Container("Error in prim_map_keyIteratorValue.");
+                    stack[argStart] = Obj.MakeString("Error in prim_map_keyIteratorValue.");
                     return PrimitiveResult.Error;
                 }
 
-                args[0] = new Container("Iterator must be an integer.");
+                stack[argStart] = Obj.MakeString("Iterator must be an integer.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container("Iterator must be a number.");
+            stack[argStart] = Obj.MakeString("Iterator must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_map_valueIteratorValue(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_map_valueIteratorValue(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjMap map = (ObjMap)args[0].Obj;
+            ObjMap map = (ObjMap)stack[argStart];
 
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                int index = (int)args[1].Num;
+                int index = (int)stack[argStart + 1].Num;
 
-                if (index == args[1].Num)
+                if (index == stack[argStart + 1].Num)
                 {
                     if (map != null && index >= 0 && index < map.Count())
                     {
-                        args[0] = map.Get(index - 1);
+                        stack[argStart] = map.Get(index - 1);
                         return PrimitiveResult.Value;
                     }
-                    args[0] = new Container("Error in prim_map_valueIteratorValue.");
+                    stack[argStart] = Obj.MakeString("Error in prim_map_valueIteratorValue.");
                     return PrimitiveResult.Error;
                 }
 
-                args[0] = new Container("Iterator must be an integer.");
+                stack[argStart] = Obj.MakeString("Iterator must be an integer.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container("Iterator must be a number.");
+            stack[argStart] = Obj.MakeString("Iterator must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_null_not(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_null_not(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(true);
+            stack[argStart] = Obj.Bool(true);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_null_toString(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_null_toString(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container("null");
+            stack[argStart] = Obj.MakeString("null");
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_num_fromString(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_fromString(SophieVM vm, Obj[] stack, int argStart)
         {
 
-            ObjString s = args[1].Obj as ObjString;
+            ObjString s = stack[argStart + 1] as ObjString;
 
             if (s != null)
             {
-                if (s.Value.Length != 0)
+                if (s.Str.Length != 0)
                 {
                     double n;
 
-                    if (double.TryParse(s.Value, out n))
+                    if (double.TryParse(s.Str, out n))
                     {
-                        args[0] = new Container(n);
+                        stack[argStart] = new Obj(n);
                         return PrimitiveResult.Value;
                     }
 
-                    args[0] = new Container (ContainerType.Null);
+                    stack[argStart] = Obj.Null;
                     return PrimitiveResult.Value;
                 }
 
-                args[0] = new Container (ContainerType.Null);
+                stack[argStart] = Obj.Null;
                 return PrimitiveResult.Value;
             }
 
             // Corner case: Can't parse an empty string.
-            args[0] = new Container("Argument must be a string.");
+            stack[argStart] = Obj.MakeString("Argument must be a string.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_num_pi(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_pi(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(3.14159265358979323846);
+            stack[argStart] = new Obj(3.14159265358979323846);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_num_minus(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_minus(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                args[0] = new Container(args[0].Num - args[1].Num);
+                stack[argStart] = new Obj(stack[argStart].Num - stack[argStart + 1].Num);
                 return PrimitiveResult.Value;
             }
-            args[0] = new Container("Right operand must be a number.");
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_num_plus(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_plus(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                args[0] = new Container(args[0].Num + args[1].Num);
+                stack[argStart] = new Obj(stack[argStart].Num + stack[argStart + 1].Num);
                 return PrimitiveResult.Value;
             }
-            args[0] = new Container("Right operand must be a number.");
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_num_multiply(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_multiply(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                args[0] = new Container(args[0].Num * args[1].Num);
+                stack[argStart] = new Obj(stack[argStart].Num * stack[argStart + 1].Num);
                 return PrimitiveResult.Value;
             }
-            args[0] = new Container("Right operand must be a number.");
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_num_divide(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_divide(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                args[0] = new Container(args[0].Num / args[1].Num);
+                stack[argStart] = new Obj(stack[argStart].Num / stack[argStart + 1].Num);
                 return PrimitiveResult.Value;
             }
-            args[0] = new Container("Right operand must be a number.");
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_num_lt(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_lt(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                args[0] = new Container(args[0].Num < args[1].Num);
+                stack[argStart] = Obj.Bool(stack[argStart].Num < stack[argStart + 1].Num);
                 return PrimitiveResult.Value;
             }
-            args[0] = new Container("Right operand must be a number.");
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_num_gt(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_gt(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                args[0] = new Container(args[0].Num > args[1].Num);
+                stack[argStart] = Obj.Bool(stack[argStart].Num > stack[argStart + 1].Num);
                 return PrimitiveResult.Value;
             }
-            args[0] = new Container("Right operand must be a number.");
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_num_lte(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_lte(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                args[0] = new Container(args[0].Num <= args[1].Num);
+                stack[argStart] = Obj.Bool(stack[argStart].Num <= stack[argStart + 1].Num);
                 return PrimitiveResult.Value;
             }
-            args[0] = new Container("Right operand must be a number.");
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_num_gte(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_gte(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                args[0] = new Container(args[0].Num >= args[1].Num);
+                stack[argStart] = Obj.Bool(stack[argStart].Num >= stack[argStart + 1].Num);
                 return PrimitiveResult.Value;
             }
-            args[0] = new Container("Right operand must be a number.");
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_num_And(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_And(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                args[0] = new Container((Int64)args[0].Num & (Int64)args[1].Num);
+                stack[argStart] = new Obj((Int64)stack[argStart].Num & (Int64)stack[argStart + 1].Num);
                 return PrimitiveResult.Value;
             }
-            args[0] = new Container("Right operand must be a number.");
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
             return PrimitiveResult.Error;
         }
-        static PrimitiveResult prim_num_Or(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_Or(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                args[0] = new Container((Int64)args[0].Num | (Int64)args[1].Num);
+                stack[argStart] = new Obj((Int64)stack[argStart].Num | (Int64)stack[argStart + 1].Num);
                 return PrimitiveResult.Value;
             }
-            args[0] = new Container("Right operand must be a number.");
-            return PrimitiveResult.Error;
-        }
-
-        static PrimitiveResult prim_num_Xor(SophieVM vm, ObjFiber fiber, Container[] args)
-        {
-            if (args[1].Type == ContainerType.Num)
-            {
-                args[0] = new Container((Int64)args[0].Num ^ (Int64)args[1].Num);
-                return PrimitiveResult.Value;
-            }
-            args[0] = new Container("Right operand must be a number.");
-            return PrimitiveResult.Error;
-        }
-        static PrimitiveResult prim_num_LeftShift(SophieVM vm, ObjFiber fiber, Container[] args)
-        {
-            if (args[1].Type == ContainerType.Num)
-            {
-                args[0] = new Container((Int64)args[0].Num << (int)args[1].Num);
-                return PrimitiveResult.Value;
-            }
-            args[0] = new Container("Right operand must be a number.");
-            return PrimitiveResult.Error;
-        }
-        static PrimitiveResult prim_num_RightShift(SophieVM vm, ObjFiber fiber, Container[] args)
-        {
-            if (args[1].Type == ContainerType.Num)
-            {
-                args[0] = new Container((Int64)args[0].Num >> (int)args[1].Num);
-                return PrimitiveResult.Value;
-            }
-            args[0] = new Container("Right operand must be a number.");
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_num_abs(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_Xor(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Math.Abs(args[0].Num));
+            if (stack[argStart + 1].Type == ObjType.Num)
+            {
+                stack[argStart] = new Obj((Int64)stack[argStart].Num ^ (Int64)stack[argStart + 1].Num);
+                return PrimitiveResult.Value;
+            }
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
+            return PrimitiveResult.Error;
+        }
+        static PrimitiveResult prim_num_LeftShift(SophieVM vm, Obj[] stack, int argStart)
+        {
+            if (stack[argStart + 1].Type == ObjType.Num)
+            {
+                stack[argStart] = new Obj((Int64)stack[argStart].Num << (int)stack[argStart + 1].Num);
+                return PrimitiveResult.Value;
+            }
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
+            return PrimitiveResult.Error;
+        }
+        static PrimitiveResult prim_num_RightShift(SophieVM vm, Obj[] stack, int argStart)
+        {
+            if (stack[argStart + 1].Type == ObjType.Num)
+            {
+                stack[argStart] = new Obj((Int64)stack[argStart].Num >> (int)stack[argStart + 1].Num);
+                return PrimitiveResult.Value;
+            }
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
+            return PrimitiveResult.Error;
+        }
+
+        static PrimitiveResult prim_num_abs(SophieVM vm, Obj[] stack, int argStart)
+        {
+            stack[argStart] = new Obj(Math.Abs(stack[argStart].Num));
             return PrimitiveResult.Value;
         }
-        static PrimitiveResult prim_num_acos(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_acos(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Math.Acos(args[0].Num));
+            stack[argStart] = new Obj(Math.Acos(stack[argStart].Num));
             return PrimitiveResult.Value;
         }
-        static PrimitiveResult prim_num_asin(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_asin(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Math.Asin(args[0].Num));
+            stack[argStart] = new Obj(Math.Asin(stack[argStart].Num));
             return PrimitiveResult.Value;
         }
-        static PrimitiveResult prim_num_atan(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_atan(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Math.Atan(args[0].Num));
+            stack[argStart] = new Obj(Math.Atan(stack[argStart].Num));
             return PrimitiveResult.Value;
         }
-        static PrimitiveResult prim_num_ceil(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_ceil(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Math.Ceiling(args[0].Num));
+            stack[argStart] = new Obj(Math.Ceiling(stack[argStart].Num));
             return PrimitiveResult.Value;
         }
-        static PrimitiveResult prim_num_cos(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_cos(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Math.Cos(args[0].Num));
+            stack[argStart] = new Obj(Math.Cos(stack[argStart].Num));
             return PrimitiveResult.Value;
         }
-        static PrimitiveResult prim_num_floor(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_floor(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Math.Floor(args[0].Num));
+            stack[argStart] = new Obj(Math.Floor(stack[argStart].Num));
             return PrimitiveResult.Value;
         }
-        static PrimitiveResult prim_num_negate(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_negate(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(-args[0].Num);
+            stack[argStart] = new Obj(-stack[argStart].Num);
             return PrimitiveResult.Value;
         }
-        static PrimitiveResult prim_num_sin(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_sin(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Math.Sin(args[0].Num));
+            stack[argStart] = new Obj(Math.Sin(stack[argStart].Num));
             return PrimitiveResult.Value;
         }
-        static PrimitiveResult prim_num_sqrt(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_sqrt(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Math.Sqrt(args[0].Num));
+            stack[argStart] = new Obj(Math.Sqrt(stack[argStart].Num));
             return PrimitiveResult.Value;
         }
-        static PrimitiveResult prim_num_tan(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_tan(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Math.Tan(args[0].Num));
-            return PrimitiveResult.Value;
-        }
-
-        static PrimitiveResult prim_num_mod(SophieVM vm, ObjFiber fiber, Container[] args)
-        {
-            if (args[1].Type == ContainerType.Num)
-            {
-                args[0] = new Container(args[0].Num % args[1].Num);
-                return PrimitiveResult.Value;
-            }
-            args[0] = new Container("Right operand must be a number.");
-            return PrimitiveResult.Error;
-        }
-
-        static PrimitiveResult prim_num_eqeq(SophieVM vm, ObjFiber fiber, Container[] args)
-        {
-            if (args[1].Type == ContainerType.Num)
-            {
-                args[0] = new Container(args[0].Num == (args[1].Num));
-                return PrimitiveResult.Value;
-            }
-
-            args[0] = new Container(false);
+            stack[argStart] = new Obj(Math.Tan(stack[argStart].Num));
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_num_bangeq(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_mod(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                args[0] = new Container(args[0].Num != args[1].Num);
+                stack[argStart] = new Obj(stack[argStart].Num % stack[argStart + 1].Num);
+                return PrimitiveResult.Value;
+            }
+            stack[argStart] = Obj.MakeString("Right operand must be a number.");
+            return PrimitiveResult.Error;
+        }
+
+        static PrimitiveResult prim_num_eqeq(SophieVM vm, Obj[] stack, int argStart)
+        {
+            if (stack[argStart + 1].Type == ObjType.Num)
+            {
+                stack[argStart] = Obj.Bool(stack[argStart].Num == (stack[argStart + 1].Num));
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container(true);
+            stack[argStart] = Obj.Bool(false);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_num_bitwiseNot(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_bangeq(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(~(Int64)args[0].Num);
+            if (stack[argStart + 1].Type == ObjType.Num)
+            {
+                stack[argStart] = Obj.Bool(stack[argStart].Num != stack[argStart + 1].Num);
+                return PrimitiveResult.Value;
+            }
+
+            stack[argStart] = Obj.Bool(true);
+            return PrimitiveResult.Value;
+        }
+
+        static PrimitiveResult prim_num_bitwiseNot(SophieVM vm, Obj[] stack, int argStart)
+        {
+            stack[argStart] = new Obj(~(Int64)stack[argStart].Num);
             // Bitwise operators always work on 64-bit signed ints.
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_num_dotDot(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_dotDot(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                double from = args[0].Num;
-                double to = args[1].Num;
-                args[0] = new Container(new ObjRange(@from, to, true));
+                double from = stack[argStart].Num;
+                double to = stack[argStart + 1].Num;
+                stack[argStart] = new ObjRange(@from, to, true);
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Right hand side of range must be a number.");
+            stack[argStart] = Obj.MakeString("Right hand side of range must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_num_dotDotDot(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_dotDotDot(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                double from = args[0].Num;
-                double to = args[1].Num;
-                args[0] = new Container(new ObjRange(from, to, false));
+                double from = stack[argStart].Num;
+                double to = stack[argStart + 1].Num;
+                stack[argStart] = new ObjRange(from, to, false);
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Right hand side of range must be a number.");
+            stack[argStart] = Obj.MakeString("Right hand side of range must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_num_atan2(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_atan2(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Math.Atan2(args[0].Num, args[1].Num));
+            stack[argStart] = new Obj(Math.Atan2(stack[argStart].Num, stack[argStart + 1].Num));
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_num_fraction(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_fraction(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(args[0].Num - Math.Truncate(args[0].Num));
+            stack[argStart] = new Obj(stack[argStart].Num - Math.Truncate(stack[argStart].Num));
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_num_isNan(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_isNan(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(double.IsNaN(args[0].Num));
+            stack[argStart] = Obj.Bool(double.IsNaN(stack[argStart].Num));
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_num_sign(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_sign(SophieVM vm, Obj[] stack, int argStart)
         {
-            double value = args[0].Num;
-            args[0] = new Container(Math.Sign(value));
+            double value = stack[argStart].Num;
+            stack[argStart] = new Obj(Math.Sign(value));
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_num_toString(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_toString(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(args[0].Num.ToString(CultureInfo.InvariantCulture));
+            stack[argStart] = Obj.MakeString(stack[argStart].Num.ToString(CultureInfo.InvariantCulture));
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_num_truncate(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_num_truncate(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Math.Truncate(args[0].Num));
+            stack[argStart] = new Obj(Math.Truncate(stack[argStart].Num));
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_object_same(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_object_same(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Container.Equals(args[1], args[2]));
+            stack[argStart] = Obj.Bool(Obj.Equals(stack[argStart + 1], stack[argStart + 2]));
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_object_not(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_object_not(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(false);
+            stack[argStart] = Obj.Bool(false);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_object_eqeq(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_object_eqeq(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Container.Equals(args[0], args[1]));
+            stack[argStart] = Obj.Bool(Obj.Equals(stack[argStart], stack[argStart + 1]));
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_object_bangeq(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_object_bangeq(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(!Container.Equals(args[0], args[1]));
+            stack[argStart] = Obj.Bool(!Obj.Equals(stack[argStart], stack[argStart + 1]));
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_object_is(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_object_is(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Obj as ObjClass != null)
+            if (stack[argStart + 1] as ObjClass != null)
             {
-                ObjClass classObj = args[0].GetClass();
-                ObjClass baseClassObj = args[1].Obj as ObjClass;
+                ObjClass classObj = stack[argStart].GetClass();
+                ObjClass baseClassObj = stack[argStart + 1] as ObjClass;
 
                 // Walk the superclass chain looking for the class.
                 do
                 {
                     if (baseClassObj == classObj)
                     {
-                        args[0] = new Container(true);
+                        stack[argStart] = Obj.Bool(true);
                         return PrimitiveResult.Value;
                     }
 
                     classObj = classObj.Superclass;
                 } while (classObj != null);
 
-                args[0] = new Container(false);
+                stack[argStart] = Obj.Bool(false);
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Right operand must be a class.");
+            stack[argStart] = Obj.MakeString("Right operand must be a class.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_object_new(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_object_new(SophieVM vm, Obj[] stack, int argStart)
         {
             // This is the default argument-less constructor that all objects inherit.
             // It just returns "this".
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_object_toString(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_object_toString(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjClass cClass = args[0].Obj as ObjClass;
-            ObjInstance instance = args[0].Obj as ObjInstance;
+            ObjClass cClass = stack[argStart] as ObjClass;
+            ObjInstance instance = stack[argStart] as ObjInstance;
             if (cClass != null)
             {
-                args[0] = new Container(cClass.Name);
+                stack[argStart] = cClass.Name;
             }
             else if (instance != null)
             {
                 ObjString name = instance.ClassObj.Name;
-                args[0] = new Container(string.Format("instance of {0}", name));
+                stack[argStart] = Obj.MakeString(string.Format("instance of {0}", name));
             }
             else
             {
-                args[0] = new Container("<object>");
+                stack[argStart] = Obj.MakeString("<object>");
             }
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_object_type(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_object_type(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(args[0].GetClass());
+            stack[argStart] = stack[argStart].GetClass();
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_object_instantiate(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_object_instantiate(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container("Must provide a class to 'new' to construct.");
+            stack[argStart] = Obj.MakeString("Must provide a class to 'new' to construct.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_string_instantiate(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_instantiate(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container("");
+            stack[argStart] = Obj.MakeString("");
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_range_from(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_range_from(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(((ObjRange)args[0].Obj).From);
+            stack[argStart] = new Obj(((ObjRange)stack[argStart]).From);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_range_to(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_range_to(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(((ObjRange)args[0].Obj).To);
+            stack[argStart] = new Obj(((ObjRange)stack[argStart]).To);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_range_min(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_range_min(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjRange range = (ObjRange)args[0].Obj;
-            args[0] = range.From < range.To ? new Container(range.From) : new Container(range.To);
+            ObjRange range = (ObjRange)stack[argStart];
+            stack[argStart] = range.From < range.To ? new Obj(range.From) : new Obj(range.To);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_range_max(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_range_max(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjRange range = (ObjRange)args[0].Obj;
-            args[0] = range.From > range.To ? new Container(range.From) : new Container(range.To);
+            ObjRange range = (ObjRange)stack[argStart];
+            stack[argStart] = range.From > range.To ? new Obj(range.From) : new Obj(range.To);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_range_isInclusive(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_range_isInclusive(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(((ObjRange)args[0].Obj).IsInclusive);
+            stack[argStart] = Obj.Bool(((ObjRange)stack[argStart]).IsInclusive);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_range_iterate(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_range_iterate(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjRange range = (ObjRange)args[0].Obj;
+            ObjRange range = (ObjRange)stack[argStart];
 
             // Special case: empty range.
             if (range.From == range.To && !range.IsInclusive)
             {
-                args[0] = new Container(false);
+                stack[argStart] = Obj.Bool(false);
                 return PrimitiveResult.Value;
             }
 
             // Start the iteration.
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                double iterator = args[1].Num;
+                double iterator = stack[argStart + 1].Num;
 
                 // Iterate towards [to] from [from].
                 if (range.From < range.To)
@@ -1587,7 +1580,7 @@ namespace Sophie.Core.Library
                     iterator++;
                     if (iterator > range.To)
                     {
-                        args[0] = new Container(false);
+                        stack[argStart] = Obj.Bool(false);
                         return PrimitiveResult.Value;
                     }
                 }
@@ -1596,330 +1589,330 @@ namespace Sophie.Core.Library
                     iterator--;
                     if (iterator < range.To)
                     {
-                        args[0] = new Container(false);
+                        stack[argStart] = Obj.Bool(false);
                         return PrimitiveResult.Value;
                     }
                 }
 
                 if (!range.IsInclusive && iterator == range.To)
                 {
-                    args[0] = new Container(false);
+                    stack[argStart] = Obj.Bool(false);
                     return PrimitiveResult.Value;
                 }
 
-                args[0] = new Container(iterator);
+                stack[argStart] = new Obj(iterator);
                 return PrimitiveResult.Value;
             }
-            if (args[1].Type == ContainerType.Null)
+            if (stack[argStart + 1] == Obj.Null)
             {
-                args[0] = new Container(range.From);
+                stack[argStart] = new Obj(range.From);
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Iterator must be a number.");
+            stack[argStart] = Obj.MakeString("Iterator must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_range_iteratorValue(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_range_iteratorValue(SophieVM vm, Obj[] stack, int argStart)
         {
             // Assume the iterator is a number so that is the value of the range.
-            args[0] = args[1];
+            stack[argStart] = stack[argStart + 1];
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_range_toString(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_range_toString(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjRange range = args[0].Obj as ObjRange;
+            ObjRange range = stack[argStart] as ObjRange;
 
             if (range != null)
-                args[0] = new Container(string.Format("{0}{1}{2}", range.From, range.IsInclusive ? ".." : "...", range.To));
+                stack[argStart] = Obj.MakeString(string.Format("{0}{1}{2}", range.From, range.IsInclusive ? ".." : "...", range.To));
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_string_fromCodePoint(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_fromCodePoint(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                int codePoint = (int)args[1].Num;
+                int codePoint = (int)stack[argStart + 1].Num;
 
-                if (codePoint == args[1].Num)
+                if (codePoint == stack[argStart + 1].Num)
                 {
                     if (codePoint >= 0)
                     {
                         if (codePoint <= 0x10ffff)
                         {
-                            args[0] = ObjString.FromCodePoint(codePoint);
+                            stack[argStart] = ObjString.FromCodePoint(codePoint);
                             return PrimitiveResult.Value;
                         }
 
-                        args[0] = new Container("Code point cannot be greater than 0x10ffff.");
+                        stack[argStart] = Obj.MakeString("Code point cannot be greater than 0x10ffff.");
                         return PrimitiveResult.Error;
                     }
-                    args[0] = new Container("Code point cannot be negative.");
+                    stack[argStart] = Obj.MakeString("Code point cannot be negative.");
                     return PrimitiveResult.Error;
                 }
 
-                args[0] = new Container("Code point must be an integer.");
+                stack[argStart] = Obj.MakeString("Code point must be an integer.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container("Code point must be a number.");
+            stack[argStart] = Obj.MakeString("Code point must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_string_byteAt(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_byteAt(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjString s = args[0].Obj as ObjString;
+            ObjString s = stack[argStart] as ObjString;
 
             if (s == null)
             {
                 return PrimitiveResult.Error;
             }
 
-            int index = (int)(args[0].Type == ContainerType.Num ? args[0].Num : 0);
+            int index = (int)(stack[argStart].Type == ObjType.Num ? stack[argStart].Num : 0);
 
-            args[0] = new Container(s.ToString()[index]);
+            stack[argStart] = new Obj(s.ToString()[index]);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_string_codePointAt(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_codePointAt(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjString s = args[0].Obj as ObjString;
+            ObjString s = stack[argStart] as ObjString;
 
             if (s == null)
             {
                 return PrimitiveResult.Error;
             }
 
-            if (args[1].Type != ContainerType.Num)
+            if (stack[argStart + 1].Type != ObjType.Num)
             {
-                args[0] = new Container("Index must be a number.");
+                stack[argStart] = Obj.MakeString("Index must be a number.");
                 return PrimitiveResult.Error;
             }
 
-            int index = (int)args[1].Num;
+            int index = (int)stack[argStart + 1].Num;
 
-            if (index != args[1].Num)
+            if (index != stack[argStart + 1].Num)
             {
-                args[0] = new Container("Index must be an integer.");
+                stack[argStart] = Obj.MakeString("Index must be an integer.");
                 return PrimitiveResult.Error;
             }
 
-            if (index < 0 || index >= s.Value.Length)
+            if (index < 0 || index >= s.Str.Length)
             {
-                args[0] = new Container("Index out of bounds.");
+                stack[argStart] = Obj.MakeString("Index out of bounds.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container(s.Value[index]);
+            stack[argStart] = new Obj(s.Str[index]);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_string_contains(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_contains(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjString s = (ObjString)args[0].Obj;
-            ObjString search = args[1].Obj as ObjString;
+            ObjString s = (ObjString)stack[argStart];
+            ObjString search = stack[argStart + 1] as ObjString;
 
             if (search == null)
             {
-                args[0] = new Container("Argument must be a string.");
+                stack[argStart] = Obj.MakeString("Argument must be a string.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container(s.Value.Contains(search.Value));
+            stack[argStart] = Obj.Bool(s.Str.Contains(search.Str));
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_string_count(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_count(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(args[0].Obj.ToString().Length);
+            stack[argStart] = new Obj(stack[argStart].ToString().Length);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_string_endsWith(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_endsWith(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjString s = (ObjString)args[0].Obj;
-            ObjString search = args[1].Obj as ObjString;
+            ObjString s = (ObjString)stack[argStart];
+            ObjString search = stack[argStart + 1] as ObjString;
 
             if (search == null)
             {
-                args[0] = new Container("Argument must be a string.");
+                stack[argStart] = Obj.MakeString("Argument must be a string.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container(s.Value.EndsWith(search.Value));
+            stack[argStart] = Obj.Bool(s.Str.EndsWith(search.Str));
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_string_indexOf(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_indexOf(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjString s = (ObjString)args[0].Obj;
-            ObjString search = args[1].Obj as ObjString;
+            ObjString s = (ObjString)stack[argStart];
+            ObjString search = stack[argStart + 1] as ObjString;
 
             if (search != null)
             {
-                int index = s.Value.IndexOf(search.Value, StringComparison.Ordinal);
-                args[0] = new Container(index);
+                int index = s.Str.IndexOf(search.Str, StringComparison.Ordinal);
+                stack[argStart] = new Obj(index);
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Argument must be a string.");
+            stack[argStart] = Obj.MakeString("Argument must be a string.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_string_iterate(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_iterate(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjString s = (ObjString)args[0].Obj;
+            ObjString s = (ObjString)stack[argStart];
 
             // If we're starting the iteration, return the first index.
-            if (args[1].Type == ContainerType.Null)
+            if (stack[argStart + 1] == Obj.Null)
             {
-                if (s.Value.Length != 0)
+                if (s.Str.Length != 0)
                 {
-                    args[0] = new Container(0.0);
+                    stack[argStart] = new Obj(0.0);
                     return PrimitiveResult.Value;
                 }
-                args[0] = new Container(false);
+                stack[argStart] = Obj.Bool(false);
                 return PrimitiveResult.Value;
             }
 
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                if (args[1].Num < 0)
+                if (stack[argStart + 1].Num < 0)
                 {
-                    args[0] = new Container(false);
+                    stack[argStart] = Obj.Bool(false);
                     return PrimitiveResult.Value;
                 }
-                int index = (int)args[1].Num;
+                int index = (int)stack[argStart + 1].Num;
 
-                if (index == args[1].Num)
+                if (index == stack[argStart + 1].Num)
                 {
                     index++;
-                    if (index >= s.Value.Length)
+                    if (index >= s.Str.Length)
                     {
-                        args[0] = new Container(false);
+                        stack[argStart] = Obj.Bool(false);
                         return PrimitiveResult.Value;
                     }
 
-                    args[0] = new Container(index);
+                    stack[argStart] = new Obj(index);
                     return PrimitiveResult.Value;
                 }
 
                 // Advance to the beginning of the next UTF-8 sequence.
-                args[0] = new Container("Iterator must be an integer.");
+                stack[argStart] = Obj.MakeString("Iterator must be an integer.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container("Iterator must be a number.");
+            stack[argStart] = Obj.MakeString("Iterator must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_string_iterateByte(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_iterateByte(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjString s = (ObjString)args[0].Obj;
+            ObjString s = (ObjString)stack[argStart];
 
             // If we're starting the iteration, return the first index.
-            if (args[1].Type == ContainerType.Null)
+            if (stack[argStart + 1] == Obj.Null)
             {
-                if (s.Value.Length == 0)
+                if (s.Str.Length == 0)
                 {
-                    args[0] = new Container(false);
+                    stack[argStart] = Obj.Bool(false);
                     return PrimitiveResult.Value;
                 }
-                args[0] = new Container(0.0);
+                stack[argStart] = new Obj(0.0);
                 return PrimitiveResult.Value;
             }
 
-            if (args[1].Type != ContainerType.Num) return PrimitiveResult.Error;
+            if (stack[argStart + 1].Type != ObjType.Num) return PrimitiveResult.Error;
 
-            if (args[1].Num < 0)
+            if (stack[argStart + 1].Num < 0)
             {
-                args[0] = new Container(false);
+                stack[argStart] = Obj.Bool(false);
                 return PrimitiveResult.Value;
             }
-            int index = (int)args[1].Num;
+            int index = (int)stack[argStart + 1].Num;
 
             // Advance to the next byte.
             index++;
-            if (index >= s.Value.Length)
+            if (index >= s.Str.Length)
             {
-                args[0] = new Container(false);
+                stack[argStart] = Obj.Bool(false);
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container(index);
+            stack[argStart] = new Obj(index);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_string_iteratorValue(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_iteratorValue(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjString s = (ObjString)args[0].Obj;
+            ObjString s = (ObjString)stack[argStart];
 
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                int index = (int)args[1].Num;
+                int index = (int)stack[argStart + 1].Num;
 
-                if (index == args[1].Num)
+                if (index == stack[argStart + 1].Num)
                 {
-                    if (index < s.Value.Length && index >= 0)
+                    if (index < s.Str.Length && index >= 0)
                     {
-                        args[0] = new Container("" + s.Value[index]);
+                        stack[argStart] = Obj.MakeString("" + s.Str[index]);
                         return PrimitiveResult.Value;
                     }
 
-                    args[0] = new Container("Iterator out of bounds.");
+                    stack[argStart] = Obj.MakeString("Iterator out of bounds.");
                     return PrimitiveResult.Error;
                 }
 
-                args[0] = new Container("Iterator must be an integer.");
+                stack[argStart] = Obj.MakeString("Iterator must be an integer.");
                 return PrimitiveResult.Error;
             }
-            args[0] = new Container("Iterator must be a number.");
+            stack[argStart] = Obj.MakeString("Iterator must be a number.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_string_startsWith(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_startsWith(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjString s = (ObjString)args[0].Obj;
-            ObjString search = args[1].Obj as ObjString;
+            ObjString s = (ObjString)stack[argStart];
+            ObjString search = stack[argStart + 1] as ObjString;
 
             if (search != null)
             {
-                args[0] = new Container(s.Value.StartsWith(search.Value));
+                stack[argStart] = Obj.Bool(s.Str.StartsWith(search.Str));
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Argument must be a string.");
+            stack[argStart] = Obj.MakeString("Argument must be a string.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_string_toString(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_toString(SophieVM vm, Obj[] stack, int argStart)
         {
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult prim_string_plus(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_plus(SophieVM vm, Obj[] stack, int argStart)
         {
-            ObjString s1 = args[1].Obj as ObjString;
+            ObjString s1 = stack[argStart + 1] as ObjString;
             if (s1 != null)
             {
-                args[0] = new Container(((ObjString)args[0].Obj).Value + s1.Value);
+                stack[argStart] = Obj.MakeString(((ObjString)stack[argStart]).Str + s1.Str);
                 return PrimitiveResult.Value;
             }
 
-            args[0] = new Container("Right operand must be a string.");
+            stack[argStart] = Obj.MakeString("Right operand must be a string.");
             return PrimitiveResult.Error;
         }
 
-        static PrimitiveResult prim_string_subscript(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult prim_string_subscript(SophieVM vm, Obj[] stack, int argStart)
         {
-            string s = ((ObjString)args[0].Obj).Value;
+            string s = ((ObjString)stack[argStart]).Str;
 
-            if (args[1].Type == ContainerType.Num)
+            if (stack[argStart + 1].Type == ObjType.Num)
             {
-                int index = (int)args[1].Num;
+                int index = (int)stack[argStart + 1].Num;
 
-                if (index == args[1].Num)
+                if (index == stack[argStart + 1].Num)
                 {
                     if (index < 0)
                     {
@@ -1928,25 +1921,25 @@ namespace Sophie.Core.Library
 
                     if (index >= 0 && index < s.Length)
                     {
-                        args[0] = ObjString.FromCodePoint(s[index]);
+                        stack[argStart] = ObjString.FromCodePoint(s[index]);
                         return PrimitiveResult.Value;
                     }
 
-                    args[0] = new Container("Subscript out of bounds.");
+                    stack[argStart] = Obj.MakeString("Subscript out of bounds.");
                     return PrimitiveResult.Error;
                 }
 
-                args[0] = new Container("Subscript must be an integer.");
+                stack[argStart] = Obj.MakeString("Subscript must be an integer.");
                 return PrimitiveResult.Error;
             }
 
-            if (args[1].Obj as ObjRange != null)
+            if (stack[argStart + 1] as ObjRange != null)
             {
-                args[0] = new Container("Subscript ranges for strings are not implemented yet.");
+                stack[argStart] = Obj.MakeString("Subscript ranges for strings are not implemented yet.");
                 return PrimitiveResult.Error;
             }
 
-            args[0] = new Container("Subscript must be a number or a range.");
+            stack[argStart] = Obj.MakeString("Subscript must be a number or a range.");
             return PrimitiveResult.Error;
         }
 
@@ -1957,52 +1950,52 @@ namespace Sophie.Core.Library
 
             ObjClass classObj = new ObjClass(0, nameString);
 
-            vm.DefineVariable(null, name, new Container(classObj));
+            vm.DefineVariable(null, name, classObj);
 
             return classObj;
         }
 
-        static bool ValidateKey(Container arg)
+        static bool ValidateKey(Obj arg)
         {
-            return arg.Type == ContainerType.False
-                   || arg.Type == ContainerType.True
-                   || arg.Type == ContainerType.Num
-                   || arg.Type == ContainerType.Null
-                   || arg.Obj is ObjClass || arg.Obj is ObjFiber
-                   || arg.Obj is ObjRange || arg.Obj is ObjString;
+            return arg == Obj.False
+                   || arg == Obj.True
+                   || arg.Type == ObjType.Num
+                   || arg == Obj.Null
+                   || arg is ObjClass || arg is ObjFiber
+                   || arg is ObjRange || arg is ObjString;
         }
 
         public CoreLibrary(SophieVM v)
         {
-            vm = v;
+            _vm = v;
         }
 
         public void InitializeCore()
         {
             // Define the root Object class. This has to be done a little specially
             // because it has no superclass.
-            SophieVM.ObjectClass = DefineClass(vm, "Object");
-            vm.Primitive(SophieVM.ObjectClass, "!", prim_object_not);
-            vm.Primitive(SophieVM.ObjectClass, "==(_)", prim_object_eqeq);
-            vm.Primitive(SophieVM.ObjectClass, "!=(_)", prim_object_bangeq);
-            vm.Primitive(SophieVM.ObjectClass, "new", prim_object_new);
-            vm.Primitive(SophieVM.ObjectClass, "is(_)", prim_object_is);
-            vm.Primitive(SophieVM.ObjectClass, "toString", prim_object_toString);
-            vm.Primitive(SophieVM.ObjectClass, "type", prim_object_type);
-            vm.Primitive(SophieVM.ObjectClass, "<instantiate>", prim_object_instantiate);
+            SophieVM.ObjectClass = DefineClass(_vm, "Object");
+            _vm.Primitive(SophieVM.ObjectClass, "!", prim_object_not);
+            _vm.Primitive(SophieVM.ObjectClass, "==(_)", prim_object_eqeq);
+            _vm.Primitive(SophieVM.ObjectClass, "!=(_)", prim_object_bangeq);
+            _vm.Primitive(SophieVM.ObjectClass, "new", prim_object_new);
+            _vm.Primitive(SophieVM.ObjectClass, "is(_)", prim_object_is);
+            _vm.Primitive(SophieVM.ObjectClass, "toString", prim_object_toString);
+            _vm.Primitive(SophieVM.ObjectClass, "type", prim_object_type);
+            _vm.Primitive(SophieVM.ObjectClass, "<instantiate>", prim_object_instantiate);
 
             // Now we can define Class, which is a subclass of Object.
-            SophieVM.ClassClass = DefineClass(vm, "Class");
+            SophieVM.ClassClass = DefineClass(_vm, "Class");
             SophieVM.ClassClass.BindSuperclass(SophieVM.ObjectClass);
             // Store a copy of the class in ObjClass
             ObjClass.ClassClass = SophieVM.ClassClass;
             // Define the primitives
-            vm.Primitive(SophieVM.ClassClass, "<instantiate>", prim_class_instantiate);
-            vm.Primitive(SophieVM.ClassClass, "name", prim_class_name);
-            vm.Primitive(SophieVM.ClassClass, "supertype", prim_class_supertype);
+            _vm.Primitive(SophieVM.ClassClass, "<instantiate>", prim_class_instantiate);
+            _vm.Primitive(SophieVM.ClassClass, "name", prim_class_name);
+            _vm.Primitive(SophieVM.ClassClass, "supertype", prim_class_supertype);
 
             // Finally, we can define Object's metaclass which is a subclass of Class.
-            ObjClass objectMetaclass = DefineClass(vm, "Object metaclass");
+            ObjClass objectMetaclass = DefineClass(_vm, "Object metaclass");
 
             // Wire up the metaclass relationships now that all three classes are built.
             SophieVM.ObjectClass.ClassObj = objectMetaclass;
@@ -2013,7 +2006,7 @@ namespace Sophie.Core.Library
             // collected.
             objectMetaclass.BindSuperclass(SophieVM.ClassClass);
 
-            vm.Primitive(objectMetaclass, "same(_,_)", prim_object_same);
+            _vm.Primitive(objectMetaclass, "same(_,_)", prim_object_same);
 
             // The core class diagram ends up looking like this, where single lines point
             // to a class's superclass, and double lines point to its metaclass:
@@ -2038,148 +2031,148 @@ namespace Sophie.Core.Library
             //   '---------'   '-------------------'            -'
 
             // The rest of the classes can now be defined normally.
-            vm.Interpret("", coreLibSource);
+            _vm.Interpret("", CoreLibSource);
 
-            SophieVM.BoolClass = (ObjClass)vm.FindVariable("Bool").Obj;
-            vm.Primitive(SophieVM.BoolClass, "toString", prim_bool_toString);
-            vm.Primitive(SophieVM.BoolClass, "!", prim_bool_not);
+            SophieVM.BoolClass = (ObjClass)_vm.FindVariable("Bool");
+            _vm.Primitive(SophieVM.BoolClass, "toString", prim_bool_toString);
+            _vm.Primitive(SophieVM.BoolClass, "!", prim_bool_not);
 
-            SophieVM.FiberClass = (ObjClass)vm.FindVariable("Fiber").Obj;
-            vm.Primitive(SophieVM.FiberClass.ClassObj, "<instantiate>", prim_fiber_instantiate);
-            vm.Primitive(SophieVM.FiberClass.ClassObj, "new(_)", prim_fiber_new);
-            vm.Primitive(SophieVM.FiberClass.ClassObj, "abort(_)", prim_fiber_abort);
-            vm.Primitive(SophieVM.FiberClass.ClassObj, "current", prim_fiber_current);
-            vm.Primitive(SophieVM.FiberClass.ClassObj, "yield()", prim_fiber_yield);
-            vm.Primitive(SophieVM.FiberClass.ClassObj, "yield(_)", prim_fiber_yield1);
-            vm.Primitive(SophieVM.FiberClass, "call()", prim_fiber_call);
-            vm.Primitive(SophieVM.FiberClass, "call(_)", prim_fiber_call1);
-            vm.Primitive(SophieVM.FiberClass, "error", prim_fiber_error);
-            vm.Primitive(SophieVM.FiberClass, "isDone", prim_fiber_isDone);
-            vm.Primitive(SophieVM.FiberClass, "run()", prim_fiber_run);
-            vm.Primitive(SophieVM.FiberClass, "run(_)", prim_fiber_run1);
-            vm.Primitive(SophieVM.FiberClass, "try()", prim_fiber_try);
+            SophieVM.FiberClass = (ObjClass)_vm.FindVariable("Fiber");
+            _vm.Primitive(SophieVM.FiberClass.ClassObj, "<instantiate>", prim_fiber_instantiate);
+            _vm.Primitive(SophieVM.FiberClass.ClassObj, "new(_)", prim_fiber_new);
+            _vm.Primitive(SophieVM.FiberClass.ClassObj, "abort(_)", prim_fiber_abort);
+            _vm.Primitive(SophieVM.FiberClass.ClassObj, "current", prim_fiber_current);
+            _vm.Primitive(SophieVM.FiberClass.ClassObj, "yield()", prim_fiber_yield);
+            _vm.Primitive(SophieVM.FiberClass.ClassObj, "yield(_)", prim_fiber_yield1);
+            _vm.Primitive(SophieVM.FiberClass, "call()", prim_fiber_call);
+            _vm.Primitive(SophieVM.FiberClass, "call(_)", prim_fiber_call1);
+            _vm.Primitive(SophieVM.FiberClass, "error", prim_fiber_error);
+            _vm.Primitive(SophieVM.FiberClass, "isDone", prim_fiber_isDone);
+            _vm.Primitive(SophieVM.FiberClass, "run()", prim_fiber_run);
+            _vm.Primitive(SophieVM.FiberClass, "run(_)", prim_fiber_run1);
+            _vm.Primitive(SophieVM.FiberClass, "try()", prim_fiber_try);
 
-            SophieVM.FnClass = (ObjClass)vm.FindVariable("Fn").Obj;
-            vm.Primitive(SophieVM.FnClass.ClassObj, "<instantiate>", prim_fn_instantiate);
-            vm.Primitive(SophieVM.FnClass.ClassObj, "new(_)", prim_fn_new);
+            SophieVM.FnClass = (ObjClass)_vm.FindVariable("Fn");
+            _vm.Primitive(SophieVM.FnClass.ClassObj, "<instantiate>", prim_fn_instantiate);
+            _vm.Primitive(SophieVM.FnClass.ClassObj, "new(_)", prim_fn_new);
 
-            vm.Primitive(SophieVM.FnClass, "arity", prim_fn_arity);
-            vm.Primitive(SophieVM.FnClass, "call()", prim_fn_call0);
-            vm.Primitive(SophieVM.FnClass, "call(_)", prim_fn_call1);
-            vm.Primitive(SophieVM.FnClass, "call(_,_)", prim_fn_call2);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_)", prim_fn_call3);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_,_)", prim_fn_call4);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_)", prim_fn_call5);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_)", prim_fn_call6);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_)", prim_fn_call7);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_)", prim_fn_call8);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_)", prim_fn_call9);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_)", prim_fn_call10);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_,_)", prim_fn_call11);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_,_,_)", prim_fn_call12);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_,_,_,_)", prim_fn_call13);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_,_,_,_,_)", prim_fn_call14);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_,_,_,_,_,_)", prim_fn_call15);
-            vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_)", prim_fn_call16);
-            vm.Primitive(SophieVM.FnClass, "toString", prim_fn_toString);
+            _vm.Primitive(SophieVM.FnClass, "arity", prim_fn_arity);
+            _vm.Primitive(SophieVM.FnClass, "call()", prim_fn_call0);
+            _vm.Primitive(SophieVM.FnClass, "call(_)", prim_fn_call1);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_)", prim_fn_call2);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_)", prim_fn_call3);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_,_)", prim_fn_call4);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_)", prim_fn_call5);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_)", prim_fn_call6);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_)", prim_fn_call7);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_)", prim_fn_call8);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_)", prim_fn_call9);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_)", prim_fn_call10);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_,_)", prim_fn_call11);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_,_,_)", prim_fn_call12);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_,_,_,_)", prim_fn_call13);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_,_,_,_,_)", prim_fn_call14);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_,_,_,_,_,_)", prim_fn_call15);
+            _vm.Primitive(SophieVM.FnClass, "call(_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_)", prim_fn_call16);
+            _vm.Primitive(SophieVM.FnClass, "toString", prim_fn_toString);
 
-            SophieVM.NullClass = (ObjClass)vm.FindVariable("Null").Obj;
-            vm.Primitive(SophieVM.NullClass, "!", prim_null_not);
-            vm.Primitive(SophieVM.NullClass, "toString", prim_null_toString);
+            SophieVM.NullClass = (ObjClass)_vm.FindVariable("Null");
+            _vm.Primitive(SophieVM.NullClass, "!", prim_null_not);
+            _vm.Primitive(SophieVM.NullClass, "toString", prim_null_toString);
 
-            SophieVM.NumClass = (ObjClass)vm.FindVariable("Num").Obj;
-            vm.Primitive(SophieVM.NumClass.ClassObj, "fromString(_)", prim_num_fromString);
-            vm.Primitive(SophieVM.NumClass.ClassObj, "pi", prim_num_pi);
-            vm.Primitive(SophieVM.NumClass, "-(_)", prim_num_minus);
-            vm.Primitive(SophieVM.NumClass, "+(_)", prim_num_plus);
-            vm.Primitive(SophieVM.NumClass, "*(_)", prim_num_multiply);
-            vm.Primitive(SophieVM.NumClass, "/(_)", prim_num_divide);
-            vm.Primitive(SophieVM.NumClass, "<(_)", prim_num_lt);
-            vm.Primitive(SophieVM.NumClass, ">(_)", prim_num_gt);
-            vm.Primitive(SophieVM.NumClass, "<=(_)", prim_num_lte);
-            vm.Primitive(SophieVM.NumClass, ">=(_)", prim_num_gte);
-            vm.Primitive(SophieVM.NumClass, "&(_)", prim_num_And);
-            vm.Primitive(SophieVM.NumClass, "|(_)", prim_num_Or);
-            vm.Primitive(SophieVM.NumClass, "^(_)", prim_num_Xor);
-            vm.Primitive(SophieVM.NumClass, "<<(_)", prim_num_LeftShift);
-            vm.Primitive(SophieVM.NumClass, ">>(_)", prim_num_RightShift);
-            vm.Primitive(SophieVM.NumClass, "abs", prim_num_abs);
-            vm.Primitive(SophieVM.NumClass, "acos", prim_num_acos);
-            vm.Primitive(SophieVM.NumClass, "asin", prim_num_asin);
-            vm.Primitive(SophieVM.NumClass, "atan", prim_num_atan);
-            vm.Primitive(SophieVM.NumClass, "ceil", prim_num_ceil);
-            vm.Primitive(SophieVM.NumClass, "cos", prim_num_cos);
-            vm.Primitive(SophieVM.NumClass, "floor", prim_num_floor);
-            vm.Primitive(SophieVM.NumClass, "-", prim_num_negate);
-            vm.Primitive(SophieVM.NumClass, "sin", prim_num_sin);
-            vm.Primitive(SophieVM.NumClass, "sqrt", prim_num_sqrt);
-            vm.Primitive(SophieVM.NumClass, "tan", prim_num_tan);
-            vm.Primitive(SophieVM.NumClass, "%(_)", prim_num_mod);
-            vm.Primitive(SophieVM.NumClass, "~", prim_num_bitwiseNot);
-            vm.Primitive(SophieVM.NumClass, "..(_)", prim_num_dotDot);
-            vm.Primitive(SophieVM.NumClass, "...(_)", prim_num_dotDotDot);
-            vm.Primitive(SophieVM.NumClass, "atan(_)", prim_num_atan2);
-            vm.Primitive(SophieVM.NumClass, "fraction", prim_num_fraction);
-            vm.Primitive(SophieVM.NumClass, "isNan", prim_num_isNan);
-            vm.Primitive(SophieVM.NumClass, "sign", prim_num_sign);
-            vm.Primitive(SophieVM.NumClass, "toString", prim_num_toString);
-            vm.Primitive(SophieVM.NumClass, "truncate", prim_num_truncate);
+            SophieVM.NumClass = (ObjClass)_vm.FindVariable("Num");
+            _vm.Primitive(SophieVM.NumClass.ClassObj, "fromString(_)", prim_num_fromString);
+            _vm.Primitive(SophieVM.NumClass.ClassObj, "pi", prim_num_pi);
+            _vm.Primitive(SophieVM.NumClass, "-(_)", prim_num_minus);
+            _vm.Primitive(SophieVM.NumClass, "+(_)", prim_num_plus);
+            _vm.Primitive(SophieVM.NumClass, "*(_)", prim_num_multiply);
+            _vm.Primitive(SophieVM.NumClass, "/(_)", prim_num_divide);
+            _vm.Primitive(SophieVM.NumClass, "<(_)", prim_num_lt);
+            _vm.Primitive(SophieVM.NumClass, ">(_)", prim_num_gt);
+            _vm.Primitive(SophieVM.NumClass, "<=(_)", prim_num_lte);
+            _vm.Primitive(SophieVM.NumClass, ">=(_)", prim_num_gte);
+            _vm.Primitive(SophieVM.NumClass, "&(_)", prim_num_And);
+            _vm.Primitive(SophieVM.NumClass, "|(_)", prim_num_Or);
+            _vm.Primitive(SophieVM.NumClass, "^(_)", prim_num_Xor);
+            _vm.Primitive(SophieVM.NumClass, "<<(_)", prim_num_LeftShift);
+            _vm.Primitive(SophieVM.NumClass, ">>(_)", prim_num_RightShift);
+            _vm.Primitive(SophieVM.NumClass, "abs", prim_num_abs);
+            _vm.Primitive(SophieVM.NumClass, "acos", prim_num_acos);
+            _vm.Primitive(SophieVM.NumClass, "asin", prim_num_asin);
+            _vm.Primitive(SophieVM.NumClass, "atan", prim_num_atan);
+            _vm.Primitive(SophieVM.NumClass, "ceil", prim_num_ceil);
+            _vm.Primitive(SophieVM.NumClass, "cos", prim_num_cos);
+            _vm.Primitive(SophieVM.NumClass, "floor", prim_num_floor);
+            _vm.Primitive(SophieVM.NumClass, "-", prim_num_negate);
+            _vm.Primitive(SophieVM.NumClass, "sin", prim_num_sin);
+            _vm.Primitive(SophieVM.NumClass, "sqrt", prim_num_sqrt);
+            _vm.Primitive(SophieVM.NumClass, "tan", prim_num_tan);
+            _vm.Primitive(SophieVM.NumClass, "%(_)", prim_num_mod);
+            _vm.Primitive(SophieVM.NumClass, "~", prim_num_bitwiseNot);
+            _vm.Primitive(SophieVM.NumClass, "..(_)", prim_num_dotDot);
+            _vm.Primitive(SophieVM.NumClass, "...(_)", prim_num_dotDotDot);
+            _vm.Primitive(SophieVM.NumClass, "atan(_)", prim_num_atan2);
+            _vm.Primitive(SophieVM.NumClass, "fraction", prim_num_fraction);
+            _vm.Primitive(SophieVM.NumClass, "isNan", prim_num_isNan);
+            _vm.Primitive(SophieVM.NumClass, "sign", prim_num_sign);
+            _vm.Primitive(SophieVM.NumClass, "toString", prim_num_toString);
+            _vm.Primitive(SophieVM.NumClass, "truncate", prim_num_truncate);
 
             // These are defined just so that 0 and -0 are equal, which is specified by
             // IEEE 754 even though they have different bit representations.
-            vm.Primitive(SophieVM.NumClass, "==(_)", prim_num_eqeq);
-            vm.Primitive(SophieVM.NumClass, "!=(_)", prim_num_bangeq);
+            _vm.Primitive(SophieVM.NumClass, "==(_)", prim_num_eqeq);
+            _vm.Primitive(SophieVM.NumClass, "!=(_)", prim_num_bangeq);
 
-            SophieVM.StringClass = (ObjClass)vm.FindVariable("String").Obj;
-            vm.Primitive(SophieVM.StringClass.ClassObj, "fromCodePoint(_)", prim_string_fromCodePoint);
-            vm.Primitive(SophieVM.StringClass.ClassObj, "<instantiate>", prim_string_instantiate);
-            vm.Primitive(SophieVM.StringClass, "+(_)", prim_string_plus);
-            vm.Primitive(SophieVM.StringClass, "[_]", prim_string_subscript);
-            vm.Primitive(SophieVM.StringClass, "byteAt(_)", prim_string_byteAt);
-            vm.Primitive(SophieVM.StringClass, "codePointAt(_)", prim_string_codePointAt);
-            vm.Primitive(SophieVM.StringClass, "contains(_)", prim_string_contains);
-            vm.Primitive(SophieVM.StringClass, "count", prim_string_count);
-            vm.Primitive(SophieVM.StringClass, "endsWith(_)", prim_string_endsWith);
-            vm.Primitive(SophieVM.StringClass, "indexOf(_)", prim_string_indexOf);
-            vm.Primitive(SophieVM.StringClass, "iterate(_)", prim_string_iterate);
-            vm.Primitive(SophieVM.StringClass, "iterateByte_(_)", prim_string_iterateByte);
-            vm.Primitive(SophieVM.StringClass, "iteratorValue(_)", prim_string_iteratorValue);
-            vm.Primitive(SophieVM.StringClass, "startsWith(_)", prim_string_startsWith);
-            vm.Primitive(SophieVM.StringClass, "toString", prim_string_toString);
+            SophieVM.StringClass = (ObjClass)_vm.FindVariable("String");
+            _vm.Primitive(SophieVM.StringClass.ClassObj, "fromCodePoint(_)", prim_string_fromCodePoint);
+            _vm.Primitive(SophieVM.StringClass.ClassObj, "<instantiate>", prim_string_instantiate);
+            _vm.Primitive(SophieVM.StringClass, "+(_)", prim_string_plus);
+            _vm.Primitive(SophieVM.StringClass, "[_]", prim_string_subscript);
+            _vm.Primitive(SophieVM.StringClass, "byteAt(_)", prim_string_byteAt);
+            _vm.Primitive(SophieVM.StringClass, "codePointAt(_)", prim_string_codePointAt);
+            _vm.Primitive(SophieVM.StringClass, "contains(_)", prim_string_contains);
+            _vm.Primitive(SophieVM.StringClass, "count", prim_string_count);
+            _vm.Primitive(SophieVM.StringClass, "endsWith(_)", prim_string_endsWith);
+            _vm.Primitive(SophieVM.StringClass, "indexOf(_)", prim_string_indexOf);
+            _vm.Primitive(SophieVM.StringClass, "iterate(_)", prim_string_iterate);
+            _vm.Primitive(SophieVM.StringClass, "iterateByte_(_)", prim_string_iterateByte);
+            _vm.Primitive(SophieVM.StringClass, "iteratorValue(_)", prim_string_iteratorValue);
+            _vm.Primitive(SophieVM.StringClass, "startsWith(_)", prim_string_startsWith);
+            _vm.Primitive(SophieVM.StringClass, "toString", prim_string_toString);
 
-            SophieVM.ListClass = (ObjClass)vm.FindVariable("List").Obj;
-            vm.Primitive(SophieVM.ListClass.ClassObj, "<instantiate>", prim_list_instantiate);
-            vm.Primitive(SophieVM.ListClass, "[_]", prim_list_subscript);
-            vm.Primitive(SophieVM.ListClass, "[_]=(_)", prim_list_subscriptSetter);
-            vm.Primitive(SophieVM.ListClass, "add(_)", prim_list_add);
-            vm.Primitive(SophieVM.ListClass, "clear()", prim_list_clear);
-            vm.Primitive(SophieVM.ListClass, "count", prim_list_count);
-            vm.Primitive(SophieVM.ListClass, "insert(_,_)", prim_list_insert);
-            vm.Primitive(SophieVM.ListClass, "iterate(_)", prim_list_iterate);
-            vm.Primitive(SophieVM.ListClass, "iteratorValue(_)", prim_list_iteratorValue);
-            vm.Primitive(SophieVM.ListClass, "removeAt(_)", prim_list_removeAt);
+            SophieVM.ListClass = (ObjClass)_vm.FindVariable("List");
+            _vm.Primitive(SophieVM.ListClass.ClassObj, "<instantiate>", prim_list_instantiate);
+            _vm.Primitive(SophieVM.ListClass, "[_]", prim_list_subscript);
+            _vm.Primitive(SophieVM.ListClass, "[_]=(_)", prim_list_subscriptSetter);
+            _vm.Primitive(SophieVM.ListClass, "add(_)", prim_list_add);
+            _vm.Primitive(SophieVM.ListClass, "clear()", prim_list_clear);
+            _vm.Primitive(SophieVM.ListClass, "count", prim_list_count);
+            _vm.Primitive(SophieVM.ListClass, "insert(_,_)", prim_list_insert);
+            _vm.Primitive(SophieVM.ListClass, "iterate(_)", prim_list_iterate);
+            _vm.Primitive(SophieVM.ListClass, "iteratorValue(_)", prim_list_iteratorValue);
+            _vm.Primitive(SophieVM.ListClass, "removeAt(_)", prim_list_removeAt);
 
-            SophieVM.MapClass = (ObjClass)vm.FindVariable("Map").Obj;
-            vm.Primitive(SophieVM.MapClass.ClassObj, "<instantiate>", prim_map_instantiate);
-            vm.Primitive(SophieVM.MapClass, "[_]", prim_map_subscript);
-            vm.Primitive(SophieVM.MapClass, "[_]=(_)", prim_map_subscriptSetter);
-            vm.Primitive(SophieVM.MapClass, "clear()", prim_map_clear);
-            vm.Primitive(SophieVM.MapClass, "containsKey(_)", prim_map_containsKey);
-            vm.Primitive(SophieVM.MapClass, "count", prim_map_count);
-            vm.Primitive(SophieVM.MapClass, "remove(_)", prim_map_remove);
-            vm.Primitive(SophieVM.MapClass, "iterate_(_)", prim_map_iterate);
-            vm.Primitive(SophieVM.MapClass, "keyIteratorValue_(_)", prim_map_keyIteratorValue);
-            vm.Primitive(SophieVM.MapClass, "valueIteratorValue_(_)", prim_map_valueIteratorValue);
+            SophieVM.MapClass = (ObjClass)_vm.FindVariable("Map");
+            _vm.Primitive(SophieVM.MapClass.ClassObj, "<instantiate>", prim_map_instantiate);
+            _vm.Primitive(SophieVM.MapClass, "[_]", prim_map_subscript);
+            _vm.Primitive(SophieVM.MapClass, "[_]=(_)", prim_map_subscriptSetter);
+            _vm.Primitive(SophieVM.MapClass, "clear()", prim_map_clear);
+            _vm.Primitive(SophieVM.MapClass, "containsKey(_)", prim_map_containsKey);
+            _vm.Primitive(SophieVM.MapClass, "count", prim_map_count);
+            _vm.Primitive(SophieVM.MapClass, "remove(_)", prim_map_remove);
+            _vm.Primitive(SophieVM.MapClass, "iterate_(_)", prim_map_iterate);
+            _vm.Primitive(SophieVM.MapClass, "keyIteratorValue_(_)", prim_map_keyIteratorValue);
+            _vm.Primitive(SophieVM.MapClass, "valueIteratorValue_(_)", prim_map_valueIteratorValue);
 
-            SophieVM.RangeClass = (ObjClass)vm.FindVariable("Range").Obj;
-            vm.Primitive(SophieVM.RangeClass, "from", prim_range_from);
-            vm.Primitive(SophieVM.RangeClass, "to", prim_range_to);
-            vm.Primitive(SophieVM.RangeClass, "min", prim_range_min);
-            vm.Primitive(SophieVM.RangeClass, "max", prim_range_max);
-            vm.Primitive(SophieVM.RangeClass, "isInclusive", prim_range_isInclusive);
-            vm.Primitive(SophieVM.RangeClass, "iterate(_)", prim_range_iterate);
-            vm.Primitive(SophieVM.RangeClass, "iteratorValue(_)", prim_range_iteratorValue);
-            vm.Primitive(SophieVM.RangeClass, "toString", prim_range_toString);
+            SophieVM.RangeClass = (ObjClass)_vm.FindVariable("Range");
+            _vm.Primitive(SophieVM.RangeClass, "from", prim_range_from);
+            _vm.Primitive(SophieVM.RangeClass, "to", prim_range_to);
+            _vm.Primitive(SophieVM.RangeClass, "min", prim_range_min);
+            _vm.Primitive(SophieVM.RangeClass, "max", prim_range_max);
+            _vm.Primitive(SophieVM.RangeClass, "isInclusive", prim_range_isInclusive);
+            _vm.Primitive(SophieVM.RangeClass, "iterate(_)", prim_range_iterate);
+            _vm.Primitive(SophieVM.RangeClass, "iteratorValue(_)", prim_range_iteratorValue);
+            _vm.Primitive(SophieVM.RangeClass, "toString", prim_range_toString);
 
             // While bootstrapping the core types and running the core library, a number
             // of string objects have been created, many of which were instantiated

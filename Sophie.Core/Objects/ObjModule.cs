@@ -1,16 +1,17 @@
 ﻿using System.Collections.Generic;
-using Sophie.Core.VM;
 
 namespace Sophie.Core.Objects
 {
     // A loaded module and the top-level variables it defines.
-    public class ObjModule: Obj
+    public class ObjModule : Obj
     {
-        public const int MAX_MODULE_VARS = 65536;
+        public const int MaxModuleVars = 65536;
 
         // The currently defined top-level variables.
+        public List<ModuleVariable> Variables;
 
         // The name of the module.
+        public ObjString Name;
 
         // Creates a new module.
         public ObjModule(ObjString name)
@@ -18,16 +19,12 @@ namespace Sophie.Core.Objects
             Name = name;
             Variables = new List<ModuleVariable>();
         }
-
-        public List<ModuleVariable> Variables;
-
-        public ObjString Name;
     }
 
     public class ModuleVariable
     {
         public string Name;
 
-        internal Container Container;
+        internal Obj Container;
     }
 }

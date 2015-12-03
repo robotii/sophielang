@@ -15,7 +15,7 @@ namespace Sophie.Core.VM
         RuntimeError = 70
     } ;
 
-    public class SophieVM
+    public sealed class SophieVM
     {
         public static ObjClass BoolClass;
         public static ObjClass ClassClass;
@@ -30,9 +30,9 @@ namespace Sophie.Core.VM
         public static ObjClass StringClass;
 
         // The fiber that is currently running.
-        ObjFiber fiber;
+        public ObjFiber Fiber;
 
-        readonly ObjMap modules;
+        readonly ObjMap _modules;
 
         public SophieVM()
         {
@@ -42,8 +42,8 @@ namespace Sophie.Core.VM
             // Implicitly create a "core" module for the built in libraries.
             ObjModule coreModule = new ObjModule(name);
 
-            modules = new ObjMap();
-            modules.Set(new Container (ContainerType.Null), new Container(coreModule));
+            _modules = new ObjMap();
+            _modules.Set(Obj.Null, coreModule);
 
             CoreLibrary core = new CoreLibrary(this);
             core.InitializeCore();
@@ -52,65 +52,65 @@ namespace Sophie.Core.VM
             Library.System.LoadSystemLibrary(this);
         }
 
-        public List<string> MethodNames;
+        public readonly List<string> MethodNames;
 
         public Compiler Compiler { get; set; }
 
         public SophieLoadModuleFn LoadModuleFn { get; set; }
 
         // Defines [methodValue] as a method on [classObj].
-        private static Container BindMethod(MethodType methodType, int symbol, ObjClass classObj, Container methodContainer)
+        private static Obj BindMethod(MethodType methodType, int symbol, ObjClass classObj, Obj methodContainer)
         {
-            ObjFn methodFn = methodContainer.Obj as ObjFn ?? ((ObjClosure)methodContainer.Obj).Function;
+            ObjFn methodFn = methodContainer as ObjFn ?? ((ObjClosure)methodContainer).Function;
 
             // Methods are always bound against the class, and not the metaclass, even
             // for static methods, because static methods don't have instance fields
             // anyway.
             Compiler.BindMethodCode(classObj, methodFn);
 
-            Method method = new Method { mType = MethodType.Block, obj = methodContainer.Obj };
+            Method method = new Method { MType = MethodType.Block, Obj = methodContainer };
 
             if (methodType == MethodType.Static)
                 classObj = classObj.ClassObj;
 
             //classObj.Methods[symbol] = method;
             classObj.BindMethod(symbol, method);
-            return new Container (ContainerType.Null);
+            return Obj.Null;
         }
 
         // Creates a string containing an appropriate method not found error for a
         // method with [symbol] on [classObj].
-        static Container MethodNotFound(SophieVM vm, ObjClass classObj, int symbol)
+        static Obj MethodNotFound(SophieVM vm, ObjClass classObj, int symbol)
         {
-            return new Container(string.Format("{0} does not implement '{1}'.", classObj.Name, vm.MethodNames[symbol]));
+            return new ObjString(string.Format("{0} does not implement '{1}'.", classObj.Name, vm.MethodNames[symbol]));
         }
 
         // Looks up the previously loaded module with [name].
         // Returns null if no module with that name has been loaded.
-        private ObjModule GetModule(Container name)
+        private ObjModule GetModule(Obj name)
         {
-            Container moduleContainer = modules.Get(name);
-            return moduleContainer.Type == ContainerType.Undefined ? null : moduleContainer.Obj as ObjModule;
+            Obj moduleContainer = _modules.Get(name);
+            return moduleContainer == Obj.Undefined ? null : moduleContainer as ObjModule;
         }
 
         // Looks up the core module in the module map.
         private ObjModule GetCoreModule()
         {
-            return GetModule(new Container (ContainerType.Null));
+            return GetModule(Obj.Null);
         }
 
-        private ObjFiber LoadModule(Container name, string source)
+        private ObjFiber LoadModule(Obj name, string source)
         {
             ObjModule module = GetModule(name);
 
             // See if the module has already been loaded.
             if (module == null)
             {
-                module = new ObjModule(name.Obj as ObjString);
+                module = new ObjModule(name as ObjString);
 
                 // Store it in the VM's module registry so we don't load the same module
                 // multiple times.
-                modules.Set(name, new Container(module));
+                _modules.Set(name, module);
 
                 // Implicitly import the core module.
                 ObjModule coreModule = GetCoreModule();
@@ -120,7 +120,7 @@ namespace Sophie.Core.VM
                 }
             }
 
-            ObjFn fn = Compiler.Compile(this, module, name.Obj.ToString(), source, true);
+            ObjFn fn = Compiler.Compile(this, module, name.ToString(), source, true);
             if (fn == null)
             {
                 // TODO: Should we still store the module even if it didn't compile?
@@ -134,39 +134,39 @@ namespace Sophie.Core.VM
             return moduleFiber;
         }
 
-        private Container ImportModule(Container name)
+        private Obj ImportModule(Obj name)
         {
             // If the module is already loaded, we don't need to do anything.
-            if (modules.Get(name).Type != ContainerType.Undefined) return new Container (ContainerType.Null);
+            if (_modules.Get(name) != Obj.Undefined) return Obj.Null;
 
             // Load the module's source code from the embedder.
-            string source = LoadModuleFn(name.Obj.ToString());
+            string source = LoadModuleFn(name.ToString());
             if (source == null)
             {
                 // Couldn't load the module.
-                return new Container(string.Format("Could not find module '{0}'.", name.Obj));
+                return new ObjString(string.Format("Could not find module '{0}'.", name));
             }
 
             ObjFiber moduleFiber = LoadModule(name, source);
 
             // Return the fiber that executes the module.
-            return new Container(moduleFiber);
+            return moduleFiber;
         }
 
 
-        private bool ImportVariable(Container moduleName, Container variableName, out Container result)
+        private bool ImportVariable(Obj moduleName, Obj variableName, out Obj result)
         {
             ObjModule module = GetModule(moduleName);
             if (module == null)
             {
-                result = new Container("Could not load module");
+                result = Obj.MakeString("Could not load module");
                 return false; // Should only look up loaded modules
             }
 
-            ObjString variable = variableName.Obj as ObjString;
+            ObjString variable = variableName as ObjString;
             if (variable == null)
             {
-                result = new Container("Variable name must be a string");
+                result = Obj.MakeString("Variable name must be a string");
                 return false;
             }
 
@@ -175,11 +175,11 @@ namespace Sophie.Core.VM
             // It's a runtime error if the imported variable does not exist.
             if (variableEntry != -1)
             {
-                result = new Container(module.Variables[variableEntry].Container);
+                result = module.Variables[variableEntry].Container;
                 return true;
             }
 
-            result = new Container(string.Format("Could not find a variable named '{0}' in module '{1}'.", variableName.Obj, moduleName.Obj));
+            result = Obj.MakeString(string.Format("Could not find a variable named '{0}' in module '{1}'.", variableName, moduleName));
             return false;
         }
 
@@ -188,20 +188,20 @@ namespace Sophie.Core.VM
         //
         // If successful, returns null. Otherwise, returns a string for the runtime
         // error message.
-        private static Container ValidateSuperclass(Container name, Container superclassContainer)
+        private static Obj ValidateSuperclass(Obj name, Obj superclassContainer)
         {
             // Make sure the superclass is a class.
-            if (!(superclassContainer.Obj is ObjClass))
+            if (!(superclassContainer is ObjClass))
             {
-                return new Container("Must inherit from a class.");
+                return Obj.MakeString("Must inherit from a class.");
             }
 
             // Make sure it doesn't inherit from a sealed built-in type. Primitive methods
             // on these classes assume the instance is one of the other Obj___ types and
             // will fail horribly if it's actually an ObjInstance.
-            ObjClass superclass = superclassContainer.Obj as ObjClass;
+            ObjClass superclass = superclassContainer as ObjClass;
 
-            return superclass.IsSealed ? new Container(string.Format("{0} cannot inherit from {1}.", name.Obj as ObjString, (superclass.Name))) : null;
+            return superclass.IsSealed ? Obj.MakeString(string.Format("{0} cannot inherit from {1}.", name as ObjString, (superclass.Name))) : null;
         }
 
         // The main bytecode interpreter loop. This is where the magic happens. It is
@@ -213,133 +213,136 @@ namespace Sophie.Core.VM
             int index;
 
             /* Load Frame */
-            CallFrame frame = fiber.Frames[fiber.NumFrames - 1];
-            int ip = frame.ip;
+            CallFrame frame = Fiber.Frames[Fiber.NumFrames - 1];
+            int ip = frame.Ip;
             int stackStart = frame.StackStart;
-            Container[] stack = fiber.Stack;
-            Container[] args = new Container[17];
+            Obj[] stack = Fiber.Stack;
 
-            ObjFn fn = frame.fn as ObjFn ?? ((ObjClosure)frame.fn).Function;
+            ObjFn fn = frame.Fn as ObjFn ?? ((ObjClosure)frame.Fn).Function;
             byte[] bytecode = fn.Bytecode;
 
             while (true)
             {
                 switch (instruction = (Instruction)bytecode[ip++])
                 {
-                    case Instruction.LOAD_LOCAL_0:
-                    case Instruction.LOAD_LOCAL_1:
-                    case Instruction.LOAD_LOCAL_2:
-                    case Instruction.LOAD_LOCAL_3:
-                    case Instruction.LOAD_LOCAL_4:
-                    case Instruction.LOAD_LOCAL_5:
-                    case Instruction.LOAD_LOCAL_6:
-                    case Instruction.LOAD_LOCAL_7:
-                    case Instruction.LOAD_LOCAL_8:
+                    case Instruction.LoadLocal0:
+                    case Instruction.LoadLocal1:
+                    case Instruction.LoadLocal2:
+                    case Instruction.LoadLocal3:
+                    case Instruction.LoadLocal4:
+                    case Instruction.LoadLocal5:
+                    case Instruction.LoadLocal6:
+                    case Instruction.LoadLocal7:
+                    case Instruction.LoadLocal8:
                         index = stackStart + (int)instruction; // LOAD_LOCAL_0 has code 0
-                        if (fiber.StackTop >= fiber.Capacity)
-                            stack = fiber.IncreaseStack();
-                        stack[fiber.StackTop++] = stack[index];
+                        if (Fiber.StackTop >= Fiber.Capacity)
+                            stack = Fiber.IncreaseStack();
+                        stack[Fiber.StackTop++] = stack[index];
                         break;
 
-                    case Instruction.LOAD_LOCAL:
+                    case Instruction.LoadLocal:
                         index = stackStart + bytecode[ip++];
-                        if (fiber.StackTop >= fiber.Capacity)
-                            stack = fiber.IncreaseStack();
-                        stack[fiber.StackTop++] = stack[index];
+                        if (Fiber.StackTop >= Fiber.Capacity)
+                            stack = Fiber.IncreaseStack();
+                        stack[Fiber.StackTop++] = stack[index];
                         break;
 
-                    case Instruction.LOAD_FIELD_THIS:
+                    case Instruction.LoadFieldThis:
                         {
                             byte field = bytecode[ip++];
-                            Container receiver = stack[stackStart];
-                            ObjInstance instance = receiver.Obj as ObjInstance;
-                            if (fiber.StackTop >= fiber.Capacity)
-                                fiber.IncreaseStack();
-                            stack[fiber.StackTop++] = instance.Fields[field];
+                            Obj receiver = stack[stackStart];
+                            ObjInstance instance = receiver as ObjInstance;
+                            if (Fiber.StackTop >= Fiber.Capacity)
+                                Fiber.IncreaseStack();
+                            stack[Fiber.StackTop++] = instance.Fields[field];
                             break;
                         }
 
-                    case Instruction.POP:
-                        fiber.StackTop--;
-                        break;
-                    case Instruction.DUP:
-                        if (fiber.StackTop >= fiber.Capacity)
-                            stack = fiber.IncreaseStack();
-                        stack[fiber.StackTop] = stack[fiber.StackTop - 1];
-                        fiber.StackTop++;
-                        break;
-                    case Instruction.NULL:
-                        if (fiber.StackTop >= fiber.Capacity)
-                            stack = fiber.IncreaseStack();
-                        stack[fiber.StackTop++] = new Container(ContainerType.Null);
-                        break;
-                    case Instruction.FALSE:
-                        if (fiber.StackTop >= fiber.Capacity)
-                            stack = fiber.IncreaseStack();
-                        stack[fiber.StackTop++] = new Container(ContainerType.False);
-                        break;
-                    case Instruction.TRUE:
-                        if (fiber.StackTop >= fiber.Capacity)
-                            stack = fiber.IncreaseStack();
-                        stack[fiber.StackTop++] = new Container(ContainerType.True);
+                    case Instruction.Pop:
+                        Fiber.StackTop--;
                         break;
 
-                    case Instruction.CALL_0:
-                    case Instruction.CALL_1:
-                    case Instruction.CALL_2:
-                    case Instruction.CALL_3:
-                    case Instruction.CALL_4:
-                    case Instruction.CALL_5:
-                    case Instruction.CALL_6:
-                    case Instruction.CALL_7:
-                    case Instruction.CALL_8:
-                    case Instruction.CALL_9:
-                    case Instruction.CALL_10:
-                    case Instruction.CALL_11:
-                    case Instruction.CALL_12:
-                    case Instruction.CALL_13:
-                    case Instruction.CALL_14:
-                    case Instruction.CALL_15:
-                    case Instruction.CALL_16:
+                    case Instruction.Dup:
+                        if (Fiber.StackTop >= Fiber.Capacity)
+                            stack = Fiber.IncreaseStack();
+                        stack[Fiber.StackTop] = stack[Fiber.StackTop - 1];
+                        Fiber.StackTop++;
+                        break;
+
+                    case Instruction.Null:
+                        if (Fiber.StackTop >= Fiber.Capacity)
+                            stack = Fiber.IncreaseStack();
+                        stack[Fiber.StackTop++] = Obj.Null;
+                        break;
+
+                    case Instruction.False:
+                        if (Fiber.StackTop >= Fiber.Capacity)
+                            stack = Fiber.IncreaseStack();
+                        stack[Fiber.StackTop++] = Obj.False;
+                        break;
+
+                    case Instruction.True:
+                        if (Fiber.StackTop >= Fiber.Capacity)
+                            stack = Fiber.IncreaseStack();
+                        stack[Fiber.StackTop++] = Obj.True;
+                        break;
+
+                    case Instruction.Call0:
+                    case Instruction.Call1:
+                    case Instruction.Call2:
+                    case Instruction.Call3:
+                    case Instruction.Call4:
+                    case Instruction.Call5:
+                    case Instruction.Call6:
+                    case Instruction.Call7:
+                    case Instruction.Call8:
+                    case Instruction.Call9:
+                    case Instruction.Call10:
+                    case Instruction.Call11:
+                    case Instruction.Call12:
+                    case Instruction.Call13:
+                    case Instruction.Call14:
+                    case Instruction.Call15:
+                    case Instruction.Call16:
                     // Handle Super calls
-                    case Instruction.SUPER_0:
-                    case Instruction.SUPER_1:
-                    case Instruction.SUPER_2:
-                    case Instruction.SUPER_3:
-                    case Instruction.SUPER_4:
-                    case Instruction.SUPER_5:
-                    case Instruction.SUPER_6:
-                    case Instruction.SUPER_7:
-                    case Instruction.SUPER_8:
-                    case Instruction.SUPER_9:
-                    case Instruction.SUPER_10:
-                    case Instruction.SUPER_11:
-                    case Instruction.SUPER_12:
-                    case Instruction.SUPER_13:
-                    case Instruction.SUPER_14:
-                    case Instruction.SUPER_15:
-                    case Instruction.SUPER_16:
+                    case Instruction.Super0:
+                    case Instruction.Super1:
+                    case Instruction.Super2:
+                    case Instruction.Super3:
+                    case Instruction.Super4:
+                    case Instruction.Super5:
+                    case Instruction.Super6:
+                    case Instruction.Super7:
+                    case Instruction.Super8:
+                    case Instruction.Super9:
+                    case Instruction.Super10:
+                    case Instruction.Super11:
+                    case Instruction.Super12:
+                    case Instruction.Super13:
+                    case Instruction.Super14:
+                    case Instruction.Super15:
+                    case Instruction.Super16:
                         {
                             int numArgs = (int)instruction & 63;
                             int symbol = (bytecode[ip] << 8) + bytecode[ip + 1];
                             ip += 2;
 
                             // The receiver is the first argument.
-                            int argStart = fiber.StackTop - numArgs;
-                            Container receiver = stack[argStart];
+                            int argStart = Fiber.StackTop - numArgs;
+                            Obj receiver = stack[argStart];
                             ObjClass classObj;
 
-                            if (instruction < Instruction.SUPER_0)
+                            if (instruction < Instruction.Super0)
                             {
-                                if (receiver.Type == ContainerType.Obj)
+                                if (receiver.Type == ObjType.Obj)
                                 {
-                                    classObj = receiver.Obj.ClassObj;
+                                    classObj = receiver.ClassObj;
                                 }
-                                else if (receiver.Type == ContainerType.Num)
+                                else if (receiver.Type == ObjType.Num)
                                 {
                                     classObj = NumClass;
                                 }
-                                else if (receiver.Type == ContainerType.True || receiver.Type == ContainerType.False)
+                                else if (receiver == Obj.True || receiver == Obj.False)
                                 {
                                     classObj = BoolClass;
                                 }
@@ -351,7 +354,7 @@ namespace Sophie.Core.VM
                             else
                             {
                                 // The superclass is stored in a constant.
-                                classObj = fn.Constants[(bytecode[ip] << 8) + bytecode[ip + 1]].Obj as ObjClass;
+                                classObj = fn.Constants[(bytecode[ip] << 8) + bytecode[ip + 1]] as ObjClass;
                                 ip += 2;
                             }
 
@@ -364,78 +367,68 @@ namespace Sophie.Core.VM
 
                                 if (method != null)
                                 {
-                                    if (method.mType == MethodType.Primitive)
+                                    if (method.MType == MethodType.Primitive)
                                     {
-                                        for (int i = 0; i < numArgs; i++)
-                                            args[i] = stack[argStart + i];
                                         // After calling this, the result will be in the first arg slot.
-                                        PrimitiveResult result = method.primitive(this, fiber, args);
+                                        PrimitiveResult result = method.Primitive(this, stack, argStart);
 
                                         if (result == PrimitiveResult.Value)
                                         {
-                                            fiber.StackTop = argStart + 1;
-                                            stack[argStart] = args[0];
-                                            Instruction next = (Instruction)bytecode[ip];
-                                            if (next == Instruction.STORE_LOCAL)
-                                            {
-                                                index = stackStart + bytecode[ip + 1];
-                                                stack[index] = args[0];
-                                                ip += 2;
-                                            }
+                                            Fiber.StackTop = argStart + 1;
                                             break;
                                         }
 
-                                        frame.ip = ip;
+                                        frame.Ip = ip;
 
                                         switch (result)
                                         {
                                             case PrimitiveResult.RunFiber:
 
                                                 // If we don't have a fiber to switch to, stop interpreting.
-                                                if (args[0].Type == ContainerType.Null) return true;
+                                                if (stack[argStart] == Obj.Null) return true;
 
-                                                fiber = args[0].Obj as ObjFiber;
+                                                Fiber = stack[argStart] as ObjFiber;
                                                 /* Load Frame */
-                                                frame = fiber.Frames[fiber.NumFrames - 1];
-                                                ip = frame.ip;
+                                                frame = Fiber.Frames[Fiber.NumFrames - 1];
+                                                ip = frame.Ip;
                                                 stackStart = frame.StackStart;
-                                                stack = fiber.Stack;
-                                                fn = (frame.fn as ObjFn) ?? (frame.fn as ObjClosure).Function;
+                                                stack = Fiber.Stack;
+                                                fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
                                                 bytecode = fn.Bytecode;
                                                 break;
 
                                             case PrimitiveResult.Call:
-                                                fiber.Frames.Add(frame = new CallFrame { fn = receiver.Obj, StackStart = argStart, ip = 0 });
-                                                fiber.NumFrames++;
+                                                Fiber.Frames.Add(frame = new CallFrame { Fn = receiver, StackStart = argStart, Ip = 0 });
+                                                Fiber.NumFrames++;
 
                                                 /* Load Frame */
                                                 ip = 0;
                                                 stackStart = argStart;
-                                                fn = (frame.fn as ObjFn) ?? (frame.fn as ObjClosure).Function;
+                                                fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
                                                 bytecode = fn.Bytecode;
                                                 break;
 
                                             case PrimitiveResult.Error:
-                                                RUNTIME_ERROR(fiber, args[0]);
-                                                if (fiber == null)
+                                                RUNTIME_ERROR(Fiber, stack[argStart]);
+                                                if (Fiber == null)
                                                     return false;
-                                                frame = fiber.Frames[fiber.NumFrames - 1];
-                                                ip = frame.ip;
+                                                frame = Fiber.Frames[Fiber.NumFrames - 1];
+                                                ip = frame.Ip;
                                                 stackStart = frame.StackStart;
-                                                stack = fiber.Stack;
-                                                fn = (frame.fn as ObjFn) ?? (frame.fn as ObjClosure).Function;
+                                                stack = Fiber.Stack;
+                                                fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
                                                 bytecode = fn.Bytecode;
                                                 break;
                                         }
                                         break;
                                     }
 
-                                    if (method.mType == MethodType.Block)
+                                    if (method.MType == MethodType.Block)
                                     {
-                                        Obj mObj = method.obj;
-                                        frame.ip = ip;
-                                        fiber.Frames.Add(frame = new CallFrame { fn = mObj, StackStart = argStart, ip = 0 });
-                                        fiber.NumFrames++;
+                                        Obj mObj = method.Obj;
+                                        frame.Ip = ip;
+                                        Fiber.Frames.Add(frame = new CallFrame { Fn = mObj, StackStart = argStart, Ip = 0 });
+                                        Fiber.NumFrames++;
                                         /* Load Frame */
                                         ip = 0;
                                         stackStart = argStart;
@@ -447,96 +440,96 @@ namespace Sophie.Core.VM
                             }
 
                             /* Method not found */
-                            frame.ip = ip;
-                            RUNTIME_ERROR(fiber, MethodNotFound(this, classObj, symbol));
-                            if (fiber == null)
+                            frame.Ip = ip;
+                            RUNTIME_ERROR(Fiber, MethodNotFound(this, classObj, symbol));
+                            if (Fiber == null)
                                 return false;
-                            frame = fiber.Frames[fiber.NumFrames - 1];
-                            ip = frame.ip;
+                            frame = Fiber.Frames[Fiber.NumFrames - 1];
+                            ip = frame.Ip;
                             stackStart = frame.StackStart;
-                            stack = fiber.Stack;
-                            fn = (frame.fn as ObjFn) ?? (frame.fn as ObjClosure).Function;
+                            stack = Fiber.Stack;
+                            fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
                             bytecode = fn.Bytecode;
 
                         }
                         break;
 
-                    case Instruction.STORE_LOCAL:
+                    case Instruction.StoreLocal:
                         index = stackStart + bytecode[ip++];
-                        stack[index] = stack[fiber.StackTop - 1];
+                        stack[index] = stack[Fiber.StackTop - 1];
                         break;
 
-                    case Instruction.CONSTANT:
-                        if (fiber.StackTop >= fiber.Capacity)
-                            stack = fiber.IncreaseStack();
-                        stack[fiber.StackTop++] = fn.Constants[(bytecode[ip] << 8) + bytecode[ip + 1]];
+                    case Instruction.Constant:
+                        if (Fiber.StackTop >= Fiber.Capacity)
+                            stack = Fiber.IncreaseStack();
+                        stack[Fiber.StackTop++] = fn.Constants[(bytecode[ip] << 8) + bytecode[ip + 1]];
                         ip += 2;
                         break;
 
-                    case Instruction.LOAD_UPVALUE:
+                    case Instruction.LoadUpvalue:
                         {
-                            if (fiber.StackTop >= fiber.Capacity)
-                                stack = fiber.IncreaseStack();
-                            stack[fiber.StackTop++] = ((ObjClosure)frame.fn).Upvalues[bytecode[ip++]].Container;
+                            if (Fiber.StackTop >= Fiber.Capacity)
+                                stack = Fiber.IncreaseStack();
+                            stack[Fiber.StackTop++] = ((ObjClosure)frame.Fn).Upvalues[bytecode[ip++]].Container;
                             break;
                         }
 
-                    case Instruction.STORE_UPVALUE:
+                    case Instruction.StoreUpvalue:
                         {
-                            ObjUpvalue[] upvalues = ((ObjClosure)frame.fn).Upvalues;
-                            upvalues[bytecode[ip++]].Container = stack[fiber.StackTop - 1];
+                            ObjUpvalue[] upvalues = ((ObjClosure)frame.Fn).Upvalues;
+                            upvalues[bytecode[ip++]].Container = stack[Fiber.StackTop - 1];
                             break;
                         }
 
-                    case Instruction.LOAD_MODULE_VAR:
-                        if (fiber.StackTop >= fiber.Capacity)
-                            stack = fiber.IncreaseStack();
-                        stack[fiber.StackTop++] = fn.Module.Variables[(bytecode[ip] << 8) + bytecode[ip + 1]].Container;
+                    case Instruction.LoadModuleVar:
+                        if (Fiber.StackTop >= Fiber.Capacity)
+                            stack = Fiber.IncreaseStack();
+                        stack[Fiber.StackTop++] = fn.Module.Variables[(bytecode[ip] << 8) + bytecode[ip + 1]].Container;
                         ip += 2;
                         break;
 
-                    case Instruction.STORE_MODULE_VAR:
-                        fn.Module.Variables[(bytecode[ip] << 8) + bytecode[ip + 1]].Container = stack[fiber.StackTop - 1];
+                    case Instruction.StoreModuleVar:
+                        fn.Module.Variables[(bytecode[ip] << 8) + bytecode[ip + 1]].Container = stack[Fiber.StackTop - 1];
                         ip += 2;
                         break;
 
-                    case Instruction.STORE_FIELD_THIS:
+                    case Instruction.StoreFieldThis:
                         {
                             byte field = bytecode[ip++];
-                            Container receiver = stack[stackStart];
-                            ObjInstance instance = receiver.Obj as ObjInstance;
-                            instance.Fields[field] = stack[fiber.StackTop - 1];
+                            Obj receiver = stack[stackStart];
+                            ObjInstance instance = receiver as ObjInstance;
+                            instance.Fields[field] = stack[Fiber.StackTop - 1];
                             break;
                         }
 
-                    case Instruction.LOAD_FIELD:
+                    case Instruction.LoadField:
                         {
                             byte field = bytecode[ip++];
-                            Container receiver = stack[--fiber.StackTop];
-                            ObjInstance instance = receiver.Obj as ObjInstance;
-                            if (fiber.StackTop >= fiber.Capacity)
-                                stack = fiber.IncreaseStack();
-                            stack[fiber.StackTop++] = instance.Fields[field];
+                            Obj receiver = stack[--Fiber.StackTop];
+                            ObjInstance instance = receiver as ObjInstance;
+                            if (Fiber.StackTop >= Fiber.Capacity)
+                                stack = Fiber.IncreaseStack();
+                            stack[Fiber.StackTop++] = instance.Fields[field];
                             break;
                         }
 
-                    case Instruction.STORE_FIELD:
+                    case Instruction.StoreField:
                         {
                             byte field = bytecode[ip++];
-                            Container receiver = stack[--fiber.StackTop];
-                            ObjInstance instance = receiver.Obj as ObjInstance;
-                            instance.Fields[field] = stack[fiber.StackTop - 1];
+                            Obj receiver = stack[--Fiber.StackTop];
+                            ObjInstance instance = receiver as ObjInstance;
+                            instance.Fields[field] = stack[Fiber.StackTop - 1];
                             break;
                         }
 
-                    case Instruction.JUMP:
+                    case Instruction.Jump:
                         {
                             int offset = (bytecode[ip] << 8) + bytecode[ip + 1];
                             ip += offset + 2;
                             break;
                         }
 
-                    case Instruction.LOOP:
+                    case Instruction.Loop:
                         {
                             // Jump back to the top of the loop.
                             int offset = (bytecode[ip] << 8) + bytecode[ip + 1];
@@ -545,46 +538,46 @@ namespace Sophie.Core.VM
                             break;
                         }
 
-                    case Instruction.JUMP_IF:
+                    case Instruction.JumpIf:
                         {
                             int offset = (bytecode[ip] << 8) + bytecode[ip + 1];
                             ip += 2;
-                            ContainerType condition = stack[--fiber.StackTop].Type;
+                            Obj condition = stack[--Fiber.StackTop];
 
-                            if (condition == ContainerType.False || condition == ContainerType.Null) ip += offset;
+                            if (condition == Obj.False || condition == Obj.Null) ip += offset;
                             break;
                         }
 
-                    case Instruction.AND:
+                    case Instruction.And:
                         {
                             int offset = (bytecode[ip] << 8) + bytecode[ip + 1];
                             ip += 2;
-                            ContainerType condition = stack[fiber.StackTop - 1].Type;
+                            ObjType condition = stack[Fiber.StackTop - 1].Type;
 
                             switch (condition)
                             {
-                                case ContainerType.Null:
-                                case ContainerType.False:
+                                case ObjType.Null:
+                                case ObjType.False:
                                     ip += offset;
                                     break;
                                 default:
-                                    fiber.StackTop--;
+                                    Fiber.StackTop--;
                                     break;
                             }
                             break;
                         }
 
-                    case Instruction.OR:
+                    case Instruction.Or:
                         {
                             int offset = (bytecode[ip] << 8) + bytecode[ip + 1];
                             ip += 2;
-                            Container condition = stack[fiber.StackTop - 1];
+                            Obj condition = stack[Fiber.StackTop - 1];
 
                             switch (condition.Type)
                             {
-                                case ContainerType.Null:
-                                case ContainerType.False:
-                                    fiber.StackTop--;
+                                case ObjType.Null:
+                                case ObjType.False:
+                                    Fiber.StackTop--;
                                     break;
                                 default:
                                     ip += offset;
@@ -593,69 +586,69 @@ namespace Sophie.Core.VM
                             break;
                         }
 
-                    case Instruction.CLOSE_UPVALUE:
-                        fiber.CloseUpvalue();
-                        fiber.StackTop--;
+                    case Instruction.CloseUpvalue:
+                        Fiber.CloseUpvalue();
+                        Fiber.StackTop--;
                         break;
 
-                    case Instruction.RETURN:
+                    case Instruction.Return:
                         {
-                            fiber.Frames.RemoveAt(--fiber.NumFrames);
-                            Container result = stack[--fiber.StackTop];
+                            Fiber.Frames.RemoveAt(--Fiber.NumFrames);
+                            Obj result = stack[--Fiber.StackTop];
                             // Close any upvalues still in scope.
-                            if (fiber.StackTop > stackStart)
+                            if (Fiber.StackTop > stackStart)
                             {
-                                Container first = stack[stackStart];
-                                while (fiber.OpenUpvalues != null &&
-                                       fiber.OpenUpvalues.Container != first)
+                                Obj first = stack[stackStart];
+                                while (Fiber.OpenUpvalues != null &&
+                                       Fiber.OpenUpvalues.Container != first)
                                 {
-                                    fiber.CloseUpvalue();
+                                    Fiber.CloseUpvalue();
                                 }
-                                fiber.CloseUpvalue();
+                                Fiber.CloseUpvalue();
                             }
 
                             // If the fiber is complete, end it.
-                            if (fiber.NumFrames == 0)
+                            if (Fiber.NumFrames == 0)
                             {
                                 // If this is the main fiber, we're done.
-                                if (fiber.Caller == null) return true;
+                                if (Fiber.Caller == null) return true;
 
                                 // We have a calling fiber to resume.
-                                fiber = fiber.Caller;
-                                stack = fiber.Stack;
+                                Fiber = Fiber.Caller;
+                                stack = Fiber.Stack;
                                 // Store the result in the resuming fiber.
-                                stack[fiber.StackTop - 1] = result;
+                                stack[Fiber.StackTop - 1] = result;
                             }
                             else
                             {
                                 // Discard the stack slots for the call frame (leaving one slot for the result).
-                                fiber.StackTop = stackStart + 1;
+                                Fiber.StackTop = stackStart + 1;
 
                                 // Store the result of the block in the first slot, which is where the
                                 // caller expects it.
-                                stack[fiber.StackTop - 1] = result;
+                                stack[Fiber.StackTop - 1] = result;
                             }
 
                             /* Load Frame */
-                            frame = fiber.Frames[fiber.NumFrames - 1];
-                            ip = frame.ip;
+                            frame = Fiber.Frames[Fiber.NumFrames - 1];
+                            ip = frame.Ip;
                             stackStart = frame.StackStart;
-                            fn = frame.fn as ObjFn ?? (frame.fn as ObjClosure).Function;
+                            fn = frame.Fn as ObjFn ?? (frame.Fn as ObjClosure).Function;
                             bytecode = fn.Bytecode;
                             break;
                         }
 
-                    case Instruction.CLOSURE:
+                    case Instruction.Closure:
                         {
-                            ObjFn prototype = fn.Constants[(bytecode[ip] << 8) + bytecode[ip + 1]].Obj as ObjFn;
+                            ObjFn prototype = fn.Constants[(bytecode[ip] << 8) + bytecode[ip + 1]] as ObjFn;
                             ip += 2;
 
                             // Create the closure and push it on the stack before creating upvalues
                             // so that it doesn't get collected.
                             ObjClosure closure = new ObjClosure(prototype);
-                            if (fiber.StackTop >= fiber.Capacity)
-                                stack = fiber.IncreaseStack();
-                            stack[fiber.StackTop++] = new Container(closure);
+                            if (Fiber.StackTop >= Fiber.Capacity)
+                                stack = Fiber.IncreaseStack();
+                            stack[Fiber.StackTop++] = closure;
 
                             // Capture upvalues.
                             for (int i = 0; i < prototype.NumUpvalues; i++)
@@ -665,123 +658,123 @@ namespace Sophie.Core.VM
                                 if (isLocal > 0)
                                 {
                                     // Make an new upvalue to close over the parent's local variable.
-                                    closure.Upvalues[i] = fiber.CaptureUpvalue(stack[stackStart + index]);
+                                    closure.Upvalues[i] = Fiber.CaptureUpvalue(stackStart + index);
                                 }
                                 else
                                 {
                                     // Use the same upvalue as the current call frame.
-                                    closure.Upvalues[i] = ((ObjClosure)frame.fn).Upvalues[index];
+                                    closure.Upvalues[i] = ((ObjClosure)frame.Fn).Upvalues[index];
                                 }
                             }
 
                             break;
                         }
 
-                    case Instruction.CLASS:
+                    case Instruction.Class:
                         {
-                            Container name = stack[fiber.StackTop - 2];
+                            Obj name = stack[Fiber.StackTop - 2];
                             ObjClass superclass = ObjectClass;
 
                             // Use implicit Object superclass if none given.
-                            if (stack[fiber.StackTop - 1].Type != ContainerType.Null)
+                            if (stack[Fiber.StackTop - 1] != Obj.Null)
                             {
-                                Container error = ValidateSuperclass(name, stack[fiber.StackTop - 1]);
+                                Obj error = ValidateSuperclass(name, stack[Fiber.StackTop - 1]);
                                 if (error != null)
                                 {
-                                    frame.ip = ip;
-                                    RUNTIME_ERROR(fiber, error);
-                                    if (fiber == null)
+                                    frame.Ip = ip;
+                                    RUNTIME_ERROR(Fiber, error);
+                                    if (Fiber == null)
                                         return false;
                                     /* Load Frame */
-                                    frame = fiber.Frames[fiber.NumFrames - 1];
-                                    ip = frame.ip;
+                                    frame = Fiber.Frames[Fiber.NumFrames - 1];
+                                    ip = frame.Ip;
                                     stackStart = frame.StackStart;
-                                    stack = fiber.Stack;
-                                    fn = (frame.fn as ObjFn) ?? (frame.fn as ObjClosure).Function;
+                                    stack = Fiber.Stack;
+                                    fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
                                     bytecode = fn.Bytecode;
                                     break;
                                 }
-                                superclass = stack[fiber.StackTop - 1].Obj as ObjClass;
+                                superclass = stack[Fiber.StackTop - 1] as ObjClass;
                             }
 
                             int numFields = bytecode[ip++];
 
-                            Container classObj = new Container(new ObjClass(superclass, numFields, name.Obj as ObjString));
+                            Obj classObj = new ObjClass(superclass, numFields, name as ObjString);
 
                             // Don't pop the superclass and name off the stack until the subclass is
                             // done being created, to make sure it doesn't get collected.
-                            fiber.StackTop -= 2;
+                            Fiber.StackTop -= 2;
 
                             // Now that we know the total number of fields, make sure we don't overflow.
-                            if (superclass.NumFields + numFields > Compiler.MAX_FIELDS)
+                            if (superclass.NumFields + numFields > Compiler.MaxFields)
                             {
-                                frame.ip = ip;
-                                RUNTIME_ERROR(fiber, new Container(string.Format("Class '{0}' may not have more than 255 fields, including inherited ones.", name.Obj)));
-                                if (fiber == null)
+                                frame.Ip = ip;
+                                RUNTIME_ERROR(Fiber, Obj.MakeString(string.Format("Class '{0}' may not have more than 255 fields, including inherited ones.", name)));
+                                if (Fiber == null)
                                     return false;
                                 /* Load Frame */
-                                frame = fiber.Frames[fiber.NumFrames - 1];
-                                ip = frame.ip;
+                                frame = Fiber.Frames[Fiber.NumFrames - 1];
+                                ip = frame.Ip;
                                 stackStart = frame.StackStart;
-                                stack = fiber.Stack;
-                                fn = (frame.fn as ObjFn) ?? (frame.fn as ObjClosure).Function;
+                                stack = Fiber.Stack;
+                                fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
                                 bytecode = fn.Bytecode;
                                 break;
                             }
 
-                            if (fiber.StackTop >= fiber.Capacity)
-                                stack = fiber.IncreaseStack();
-                            stack[fiber.StackTop++] = classObj;
+                            if (Fiber.StackTop >= Fiber.Capacity)
+                                stack = Fiber.IncreaseStack();
+                            stack[Fiber.StackTop++] = classObj;
                             break;
                         }
 
-                    case Instruction.METHOD_INSTANCE:
-                    case Instruction.METHOD_STATIC:
+                    case Instruction.MethodInstance:
+                    case Instruction.MethodStatic:
                         {
                             int symbol = (bytecode[ip] << 8) + bytecode[ip + 1];
                             ip += 2;
-                            ObjClass classObj = stack[fiber.StackTop - 1].Obj as ObjClass;
-                            Container method = stack[fiber.StackTop - 2];
-                            MethodType methodType = instruction == Instruction.METHOD_INSTANCE ? MethodType.None : MethodType.Static;
-                            Container error = BindMethod(methodType, symbol, classObj, method);
-                            if ((error.Obj is ObjString))
+                            ObjClass classObj = stack[Fiber.StackTop - 1] as ObjClass;
+                            Obj method = stack[Fiber.StackTop - 2];
+                            MethodType methodType = instruction == Instruction.MethodInstance ? MethodType.None : MethodType.Static;
+                            Obj error = BindMethod(methodType, symbol, classObj, method);
+                            if ((error is ObjString))
                             {
-                                frame.ip = ip;
-                                RUNTIME_ERROR(fiber, error);
-                                if (fiber == null)
+                                frame.Ip = ip;
+                                RUNTIME_ERROR(Fiber, error);
+                                if (Fiber == null)
                                     return false;
                                 /* Load Frame */
-                                frame = fiber.Frames[fiber.NumFrames - 1];
-                                ip = frame.ip;
+                                frame = Fiber.Frames[Fiber.NumFrames - 1];
+                                ip = frame.Ip;
                                 stackStart = frame.StackStart;
-                                stack = fiber.Stack;
-                                fn = (frame.fn as ObjFn) ?? (frame.fn as ObjClosure).Function;
+                                stack = Fiber.Stack;
+                                fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
                                 bytecode = fn.Bytecode;
                                 break;
                             }
-                            fiber.StackTop -= 2;
+                            Fiber.StackTop -= 2;
                             break;
                         }
 
-                    case Instruction.LOAD_MODULE:
+                    case Instruction.LoadModule:
                         {
-                            Container name = fn.Constants[(bytecode[ip] << 8) + bytecode[ip + 1]];
+                            Obj name = fn.Constants[(bytecode[ip] << 8) + bytecode[ip + 1]];
                             ip += 2;
-                            Container result = ImportModule(name);
+                            Obj result = ImportModule(name);
 
                             // If it returned a string, it was an error message.
-                            if ((result.Obj is ObjString))
+                            if ((result is ObjString))
                             {
-                                frame.ip = ip;
-                                RUNTIME_ERROR(fiber, result);
-                                if (fiber == null)
+                                frame.Ip = ip;
+                                RUNTIME_ERROR(Fiber, result);
+                                if (Fiber == null)
                                     return false;
                                 /* Load Frame */
-                                frame = fiber.Frames[fiber.NumFrames - 1];
-                                ip = frame.ip;
+                                frame = Fiber.Frames[Fiber.NumFrames - 1];
+                                ip = frame.Ip;
                                 stackStart = frame.StackStart;
-                                stack = fiber.Stack;
-                                fn = (frame.fn as ObjFn) ?? (frame.fn as ObjClosure).Function;
+                                stack = Fiber.Stack;
+                                fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
                                 bytecode = fn.Bytecode;
                                 break;
                             }
@@ -789,61 +782,61 @@ namespace Sophie.Core.VM
                             // Make a slot that the module's fiber can use to store its result in.
                             // It ends up getting discarded, but CODE_RETURN expects to be able to
                             // place a value there.
-                            if (fiber.StackTop >= fiber.Capacity)
-                                stack = fiber.IncreaseStack();
-                            stack[fiber.StackTop++] = Container.Null;
+                            if (Fiber.StackTop >= Fiber.Capacity)
+                                stack = Fiber.IncreaseStack();
+                            stack[Fiber.StackTop++] = Obj.Null;
 
                             // If it returned a fiber to execute the module body, switch to it.
-                            if (result.Obj is ObjFiber)
+                            if (result is ObjFiber)
                             {
                                 // Return to this module when that one is done.
-                                (result.Obj as ObjFiber).Caller = fiber;
+                                (result as ObjFiber).Caller = Fiber;
 
-                                frame.ip = ip;
-                                fiber = (result.Obj as ObjFiber);
+                                frame.Ip = ip;
+                                Fiber = (result as ObjFiber);
                                 /* Load Frame */
-                                frame = fiber.Frames[fiber.NumFrames - 1];
-                                ip = frame.ip;
+                                frame = Fiber.Frames[Fiber.NumFrames - 1];
+                                ip = frame.Ip;
                                 stackStart = frame.StackStart;
-                                stack = fiber.Stack;
-                                fn = (frame.fn as ObjFn) ?? (frame.fn as ObjClosure).Function;
+                                stack = Fiber.Stack;
+                                fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
                                 bytecode = fn.Bytecode;
                             }
 
                             break;
                         }
 
-                    case Instruction.IMPORT_VARIABLE:
+                    case Instruction.ImportVariable:
                         {
-                            Container module = fn.Constants[(bytecode[ip] << 8) + bytecode[ip + 1]];
+                            Obj module = fn.Constants[(bytecode[ip] << 8) + bytecode[ip + 1]];
                             ip += 2;
-                            Container variable = fn.Constants[(bytecode[ip] << 8) + bytecode[ip + 1]];
+                            Obj variable = fn.Constants[(bytecode[ip] << 8) + bytecode[ip + 1]];
                             ip += 2;
-                            Container result;
+                            Obj result;
                             if (ImportVariable(module, variable, out result))
                             {
-                                if (fiber.StackTop >= fiber.Capacity)
-                                    stack = fiber.IncreaseStack();
-                                stack[fiber.StackTop++] = result;
+                                if (Fiber.StackTop >= Fiber.Capacity)
+                                    stack = Fiber.IncreaseStack();
+                                stack[Fiber.StackTop++] = result;
                             }
                             else
                             {
-                                frame.ip = ip;
-                                RUNTIME_ERROR(fiber, result);
-                                if (fiber == null)
+                                frame.Ip = ip;
+                                RUNTIME_ERROR(Fiber, result);
+                                if (Fiber == null)
                                     return false;
                                 /* Load Frame */
-                                frame = fiber.Frames[fiber.NumFrames - 1];
-                                ip = frame.ip;
+                                frame = Fiber.Frames[Fiber.NumFrames - 1];
+                                ip = frame.Ip;
                                 stackStart = frame.StackStart;
-                                stack = fiber.Stack;
-                                fn = (frame.fn as ObjFn) ?? (frame.fn as ObjClosure).Function;
+                                stack = Fiber.Stack;
+                                fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
                                 bytecode = fn.Bytecode;
                             }
                             break;
                         }
 
-                    case Instruction.END:
+                    case Instruction.End:
                         // A CODE_END should always be preceded by a CODE_RETURN. If we get here,
                         // the compiler generated wrong code.
                         return false;
@@ -862,7 +855,7 @@ namespace Sophie.Core.VM
             ObjFn fn = Compiler.Compile(this, coreModule, "", source, true);
             if (fn == null) return InterpretResult.CompileError;
 
-            fiber = new ObjFiber(fn);
+            Fiber = new ObjFiber(fn);
 
             return RunInterpreter() ? InterpretResult.Success : InterpretResult.RuntimeError;
         }
@@ -872,7 +865,7 @@ namespace Sophie.Core.VM
             if (sourcePath.Length == 0) return LoadIntoCore(source);
 
             // TODO: Better module name.
-            Container name = new Container("main");
+            Obj name = new ObjString("main");
 
             ObjFiber f = LoadModule(name, source);
             if (f == null)
@@ -880,14 +873,14 @@ namespace Sophie.Core.VM
                 return InterpretResult.CompileError;
             }
 
-            fiber = f;
+            Fiber = f;
 
             bool succeeded = RunInterpreter();
 
             return succeeded ? InterpretResult.Success : InterpretResult.RuntimeError;
         }
 
-        public Container FindVariable(string name)
+        public Obj FindVariable(string name)
         {
             ObjModule coreModule = GetCoreModule();
             int symbol = coreModule.Variables.FindIndex(v => v.Name == name);
@@ -897,16 +890,16 @@ namespace Sophie.Core.VM
         internal int DeclareVariable(ObjModule module, string name)
         {
             if (module == null) module = GetCoreModule();
-            if (module.Variables.Count == ObjModule.MAX_MODULE_VARS) return -2;
+            if (module.Variables.Count == ObjModule.MaxModuleVars) return -2;
 
-            module.Variables.Add(new ModuleVariable { Name = name, Container = new Container() });
+            module.Variables.Add(new ModuleVariable { Name = name, Container = Obj.Undefined });
             return module.Variables.Count - 1;
         }
 
-        internal int DefineVariable(ObjModule module, string name, Container c)
+        internal int DefineVariable(ObjModule module, string name, Obj c)
         {
             if (module == null) module = GetCoreModule();
-            if (module.Variables.Count == ObjModule.MAX_MODULE_VARS) return -2;
+            if (module.Variables.Count == ObjModule.MaxModuleVars) return -2;
 
             // See if the variable is already explicitly or implicitly declared.
             int symbol = module.Variables.FindIndex(m => m.Name == name);
@@ -917,7 +910,7 @@ namespace Sophie.Core.VM
                 module.Variables.Add(new ModuleVariable { Name = name, Container = c });
                 symbol = module.Variables.Count - 1;
             }
-            else if (module.Variables[symbol].Container.Type == ContainerType.Undefined)
+            else if (module.Variables[symbol].Container == Obj.Undefined)
             {
                 // Explicitly declaring an implicitly declared one. Mark it as defined.
                 module.Variables[symbol].Container = c;
@@ -932,7 +925,7 @@ namespace Sophie.Core.VM
         }
 
         /* Dirty Hack */
-        private void RUNTIME_ERROR(ObjFiber f, Container v)
+        private void RUNTIME_ERROR(ObjFiber f, Obj v)
         {
             if (f.Error != null)
             {
@@ -943,19 +936,19 @@ namespace Sophie.Core.VM
             if (f.CallerIsTrying)
             {
                 f.Caller.SetReturnValue(v);
-                fiber = f.Caller;
-                f.Error = v.Obj as ObjString;
+                Fiber = f.Caller;
+                f.Error = v as ObjString;
                 return;
             }
-            fiber = null;
+            Fiber = null;
 
             // TODO: Fix this so that there is no dependancy on the console
-            if (v == null || v.Obj == null || v.Obj.Type != ObjType.String)
+            if (v == null || v as ObjString == null)
             {
-                v = new Container("Error message must be a string.");
+                v = new ObjString("Error message must be a string.");
             }
-            f.Error = v.Obj as ObjString;
-            Console.Error.WriteLine(v.Obj as ObjString);
+            f.Error = v as ObjString;
+            Console.Error.WriteLine(v as ObjString);
         }
 
         /* Anotehr Dirty Hack */
@@ -967,7 +960,7 @@ namespace Sophie.Core.VM
             }
             int symbol = MethodNames.IndexOf(s);
 
-            Method m = new Method { primitive = func, mType = MethodType.Primitive };
+            Method m = new Method { Primitive = func, MType = MethodType.Primitive };
             //objClass.BindMethod(symbol, m);
             objClass.BindMethod(symbol, m);
         }

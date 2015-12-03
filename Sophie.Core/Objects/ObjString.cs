@@ -1,59 +1,73 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
 using Sophie.Core.VM;
 
 namespace Sophie.Core.Objects
 {
     public class ObjString : Obj
     {
-        private static readonly List<ObjString> strings = new List<ObjString>();
-        private static bool initCompleted;
+        private static readonly List<ObjString> Strings = new List<ObjString>();
+        private static bool _initCompleted;
+
+        public static ObjString TrueString;
+        public static ObjString FalseString;
 
         public static void InitClass()
         {
-            foreach (ObjString s in strings)
+            foreach (ObjString s in Strings)
             {
                 s.ClassObj = SophieVM.StringClass;
             }
-            initCompleted = true;
-            strings.Clear();
+            _initCompleted = true;
+            Strings.Clear();
+            TrueString = new ObjString("true");
+            FalseString = new ObjString("false");
         }
-
-        // Inline array of the string's bytes followed by a null terminator.
 
         public ObjString(string s)
         {
-            Value = s;
-            ClassObj = SophieVM.StringClass;
-            if (!initCompleted)
-                strings.Add(this);
-            Type = ObjType.String;
+            Str = s;
+
+            if (!_initCompleted)
+            {
+                Strings.Add(this);
+            }
+            else
+            {
+                ClassObj = SophieVM.StringClass;
+            }
         }
 
-        public readonly string Value;
+        public readonly string Str;
 
         public override string ToString()
         {
-            return Value;
+            return Str;
         }
 
         public override int GetHashCode()
         {
-            return Value.GetHashCode();
+            return Str.GetHashCode();
         }
 
         // Creates a new string containing the UTF-8 encoding of [value].
-        public static Container FromCodePoint(int v)
+        public static Obj FromCodePoint(int v)
         {
-            return new Container("" + Convert.ToChar(v));
+            return MakeString("" + Convert.ToChar(v));
         }
 
         // Creates a new string containing the code point in [string] starting at byte
         // [index]. If [index] points into the middle of a UTF-8 sequence, returns an
         // empty string.
-        public Container CodePointAt(int index)
+        public Obj CodePointAt(int index)
         {
-            return index > Value.Length ? new Container() : new Container(Value[index]);
+            return index > Str.Length ? Undefined : new Obj(Str[index]);
+        }
+
+        public byte[] GetBytes()
+        {
+            return Encoding.UTF8.GetBytes(Str);
         }
     }
 }

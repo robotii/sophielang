@@ -6,49 +6,32 @@ namespace Sophie.Core.Objects
     // if it has no upvalues (i.e. [numUpvalues] is zero). If it does use upvalues,
     // it must be wrapped in an [ObjClosure] first. The compiler is responsible for
     // emitting code to ensure that that happens.
-    public class ObjFn : Obj
+    public sealed class ObjFn : Obj
     {
-        public byte[] Bytecode;
+        public readonly byte[] Bytecode;
+        public readonly int NumUpvalues;
 
-        // The module where this function was defined.
-
-        public int NumUpvalues;
-        public int NumConstants;
-
-        // TODO: The argument list here is getting a bit gratuitous.
         // Creates a new function object with the given code and constants. The new
         // function will take over ownership of [bytecode] and [sourceLines]. It will
         // copy [constants] into its own array.
         public ObjFn(ObjModule module,
-            Container[] constants,
+            Obj[] constants,
             int numUpvalues, int arity,
-            byte[] bytecode, ObjString debugSourcePath,
-            string debugName, int[] sourceLines)
+            byte[] bytecode)
         {
             Bytecode = bytecode;
             Constants = constants;
             Module = module;
             NumUpvalues = numUpvalues;
-            NumConstants = constants.Length;
             Arity = arity;
-            Type = ObjType.Fn;
-
-            /* Debug Information */
-            SourcePath = debugSourcePath;
-            Name = debugName;
-            SourceLines = sourceLines;
 
             ClassObj = SophieVM.FnClass;
         }
 
-        public string Name;
+        public readonly ObjModule Module;
 
-        public ObjModule Module;
-        public ObjString SourcePath;
+        public readonly Obj[] Constants;
 
-        public Container[] Constants;
-
-        public int Arity;
-        public int[] SourceLines;
+        public readonly int Arity;
     }
 }

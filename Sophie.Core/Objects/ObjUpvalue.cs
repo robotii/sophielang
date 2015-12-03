@@ -1,6 +1,4 @@
-﻿using Sophie.Core.VM;
-
-namespace Sophie.Core.Objects
+﻿namespace Sophie.Core.Objects
 {
     public class ObjUpvalue : Obj
     {
@@ -14,14 +12,15 @@ namespace Sophie.Core.Objects
         // next upvalue in that list.
 
         // Creates a new open upvalue pointing to [value] on the stack.
-        public ObjUpvalue(Container c)
+        public ObjUpvalue(Obj c, int index)
         {
             Container = c;
             Next = null;
-            Type = ObjType.Upvalue;
+            Index = index;
         }
 
-        public Container Container;
+        public Obj Container;
         public ObjUpvalue Next;
+        public int Index;
     }
 }

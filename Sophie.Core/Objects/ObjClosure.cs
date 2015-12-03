@@ -4,7 +4,7 @@ namespace Sophie.Core.Objects
 {
     // An instance of a first-class function and the environment it has closed over.
     // Unlike [ObjFn], this has captured the upvalues that the function accesses.
-    public class ObjClosure : Obj
+    public sealed class ObjClosure : Obj
     {
         // The function that this closure is an instance of.
 
@@ -16,12 +16,11 @@ namespace Sophie.Core.Objects
         {
             Function = fn;
             Upvalues = new ObjUpvalue[fn.NumUpvalues];
-            Type = ObjType.Closure;
             ClassObj = SophieVM.FnClass;
         }
 
-        public ObjFn Function;
+        public readonly ObjFn Function;
 
-        public ObjUpvalue[] Upvalues;
+        public readonly ObjUpvalue[] Upvalues;
     }
 }

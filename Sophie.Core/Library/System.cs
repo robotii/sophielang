@@ -4,7 +4,7 @@ using Sophie.Core.VM;
 
 namespace Sophie.Core.Library
 {
-    class System
+    static class System
     {
         const string SystemLibSource =
         "class System {\n"
@@ -105,43 +105,43 @@ namespace Sophie.Core.Library
         + "\n"
         + "}\n";
 
-        static PrimitiveResult WriteString(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult WriteString(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (args[1] != null && args[1].Type == ContainerType.Obj)
+            if (stack[argStart + 1] != null && stack[argStart + 1].Type == ObjType.Obj)
             {
-                string s = args[1].Obj.ToString();
+                string s = stack[argStart + 1].ToString();
                 Console.Write(s);
             }
-            args[0] = new Container (ContainerType.Null);
+            stack[argStart] = Obj.Null;
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult Read(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult Read(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container(Console.ReadLine());
-            if (((ObjString)args[0].Obj).Value == "")
+            stack[argStart] = Obj.MakeString(Console.ReadLine());
+            if (((ObjString)stack[argStart]).Str == "")
             {
-                args[0] = new Container (ContainerType.Null);
+                stack[argStart] = Obj.Null;
             }
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult Clock(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult Clock(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container((double)DateTime.Now.Ticks / 10000000);
+            stack[argStart] = new Obj((double)DateTime.Now.Ticks / 10000000);
             return PrimitiveResult.Value;
         }
 
-        static PrimitiveResult Time(SophieVM vm, ObjFiber fiber, Container[] args)
+        static PrimitiveResult Time(SophieVM vm, Obj[] stack, int argStart)
         {
-            args[0] = new Container((double)DateTime.Now.Ticks / 10000000);
+            stack[argStart] = new Obj((double)DateTime.Now.Ticks / 10000000);
             return PrimitiveResult.Value;
         }
 
         public static void LoadSystemLibrary(SophieVM vm)
         {
             vm.Interpret("", SystemLibSource);
-            ObjClass system = (ObjClass)vm.FindVariable("System").Obj;
+            ObjClass system = (ObjClass)vm.FindVariable("System");
             vm.Primitive(system.ClassObj, "writeString_(_)", WriteString);
             vm.Primitive(system.ClassObj, "read", Read);
             vm.Primitive(system.ClassObj, "clock", Clock);
