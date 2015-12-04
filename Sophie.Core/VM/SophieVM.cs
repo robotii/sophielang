@@ -441,6 +441,13 @@ namespace Sophie.Core.VM
                         stack[index] = stack[Fiber.StackTop - 1];
                         break;
 
+                    case Instruction.SmallConstant:
+                        if (Fiber.StackTop >= Fiber.Capacity)
+                            stack = Fiber.IncreaseStack();
+                        stack[Fiber.StackTop++] = fn.Constants[bytecode[ip]];
+                        ip += 1;
+                        break;
+
                     case Instruction.Constant:
                         if (Fiber.StackTop >= Fiber.Capacity)
                             stack = Fiber.IncreaseStack();

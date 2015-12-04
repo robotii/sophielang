@@ -976,6 +976,14 @@ namespace Sophie.Core.Bytecode
             EmitShort(arg);
         }
 
+        private void EmitConstant(int arg)
+        {
+            if (arg < 256)
+                EmitByteArg(Instruction.SmallConstant, arg);
+            else
+                EmitShortArg(Instruction.Constant, arg);
+        }
+
         // Emits [instruction] followed by a placeholder for a jump offset. The
         // placeholder can be patched by calling [jumpPatch]. Returns the index of the
         // placeholder.
@@ -1270,7 +1278,7 @@ namespace Sophie.Core.Bytecode
                 // We can just load and run the function directly.
                 if (_numUpValues == 0)
                 {
-                    _parent.EmitShortArg(Instruction.Constant, constant);
+                    _parent.EmitConstant(constant);
                 }
                 else
                 {
@@ -1430,7 +1438,7 @@ namespace Sophie.Core.Bytecode
             if (isConstructor)
             {
                 // If the constructor body evaluates to a value, discard it.
-                if (isExpressionBody) 
+                if (isExpressionBody)
                     Emit(Instruction.Pop);
 
                 // The receiver is always stored in the first local slot.
@@ -2022,7 +2030,7 @@ namespace Sophie.Core.Bytecode
             int constant = c.AddConstant(new Obj(c._parser.Number));
 
             // Compile the code to load the constant.
-            c.EmitShortArg(Instruction.Constant, constant);
+            c.EmitConstant(constant);
         }
 
         // Parses a string literal and adds it to the constant table.
@@ -2041,7 +2049,7 @@ namespace Sophie.Core.Bytecode
             int constant = c.StringConstant();
 
             // Compile the code to load the constant.
-            c.EmitShortArg(Instruction.Constant, constant);
+            c.EmitConstant(constant);
         }
 
         private static void super_(Compiler c, bool allowAssignment)
@@ -2480,6 +2488,7 @@ namespace Sophie.Core.Bytecode
                 case Instruction.LoadField:
                 case Instruction.StoreField:
                 case Instruction.Class:
+                case Instruction.SmallConstant:
                     return 1;
 
                 case Instruction.Constant:
@@ -2844,7 +2853,7 @@ namespace Sophie.Core.Bytecode
             // Make a string constant for the name.
             int nameConstant = AddConstant(Obj.MakeString(_parser.Source.Substring(_parser.Previous.Start, _parser.Previous.Length)));
 
-            EmitShortArg(Instruction.Constant, nameConstant);
+            EmitConstant(nameConstant);
 
             // Load the superclass (if there is one).
             if (Match(TokenType.Is))
@@ -3156,6 +3165,7 @@ namespace Sophie.Core.Bytecode
             byte[] bytecode = fn.Bytecode;
             while (ip < bytecode.Length)
             {
+                s += ip + ": ";
                 Instruction instruction = (Instruction)bytecode[ip++];
                 s += (instruction + " ");
                 switch (instruction)
@@ -3189,6 +3199,7 @@ namespace Sophie.Core.Bytecode
                     case Instruction.LoadField:
                     case Instruction.StoreField:
                     case Instruction.Class:
+                    case Instruction.SmallConstant:
                         s += (bytecode[ip++] + "\n");
                         break;
 

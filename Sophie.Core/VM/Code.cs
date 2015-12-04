@@ -20,7 +20,10 @@
         LoadLocal8 = 8,
 
         // Load the constant at index [arg].
+        SmallConstant,
         Constant,
+
+        // Push Null onto the stack
         Null,
 
         // Push false onto the stack.
