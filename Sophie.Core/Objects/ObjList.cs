@@ -3,7 +3,7 @@ using Sophie.Core.VM;
 
 namespace Sophie.Core.Objects
 {
-    public class ObjList : Obj
+    public sealed class ObjList : Obj
     {
         // The elements in the list.
         readonly List<Obj> _elements;

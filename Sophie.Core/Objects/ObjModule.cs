@@ -3,12 +3,12 @@
 namespace Sophie.Core.Objects
 {
     // A loaded module and the top-level variables it defines.
-    public class ObjModule : Obj
+    public sealed class ObjModule : Obj
     {
         public const int MaxModuleVars = 65536;
 
         // The currently defined top-level variables.
-        public List<ModuleVariable> Variables;
+        public readonly List<ModuleVariable> Variables;
 
         // The name of the module.
         public ObjString Name;
@@ -21,7 +21,7 @@ namespace Sophie.Core.Objects
         }
     }
 
-    public class ModuleVariable
+    public sealed class ModuleVariable
     {
         public string Name;
 

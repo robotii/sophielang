@@ -1,6 +1,6 @@
 ﻿namespace Sophie.Core.Objects
 {
-    public class ObjUpvalue : Obj
+    public sealed class ObjUpvalue : Obj
     {
         // Pointer to the variable this upvalue is referencing.
 
@@ -21,6 +21,6 @@
 
         public Obj Container;
         public ObjUpvalue Next;
-        public int Index;
+        public readonly int Index;
     }
 }

@@ -117,9 +117,6 @@ namespace Sophie.Core.Bytecode
         // The most recently consumed/advanced token.
         public Token Previous;
 
-        // If subsequent newline tokens should be discarded.
-        public bool SkipNewlines;
-
         // Whether compile errors should be printed to stderr or discarded.
         public bool PrintErrors;
 
@@ -342,7 +339,7 @@ namespace Sophie.Core.Bytecode
         // Returns true if [c] is a valid (non-initial) identifier character.
         static bool IsName(char c)
         {
-            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '@';
         }
 
         // Returns true if [c] is a digit.
@@ -830,9 +827,6 @@ namespace Sophie.Core.Bytecode
                         break;
 
                     case '"': ReadString();
-                        return;
-                    case '_':
-                        ReadName(_parser, PeekChar(_parser) == '_' ? TokenType.StaticField : TokenType.Field);
                         return;
 
                     case '@':
@@ -2027,6 +2021,16 @@ namespace Sophie.Core.Bytecode
 
         private static void Number(Compiler c, bool allowAssignment)
         {
+            if (c._parser.Number == 0.0)
+            {
+                c.Emit(Instruction.Zero);
+                return;
+            }
+            if (c._parser.Number == 1.0)
+            {
+                c.Emit(Instruction.One);
+                return;
+            }
             int constant = c.AddConstant(new Obj(c._parser.Number));
 
             // Compile the code to load the constant.
@@ -2463,6 +2467,8 @@ namespace Sophie.Core.Bytecode
                 case Instruction.Null:
                 case Instruction.False:
                 case Instruction.True:
+                case Instruction.Zero:
+                case Instruction.One:
                 case Instruction.Pop:
                 case Instruction.Dup:
                 case Instruction.CloseUpvalue:
@@ -3173,6 +3179,8 @@ namespace Sophie.Core.Bytecode
                     case Instruction.Null:
                     case Instruction.False:
                     case Instruction.True:
+                    case Instruction.Zero:
+                    case Instruction.One:
                     case Instruction.Pop:
                     case Instruction.Dup:
                     case Instruction.CloseUpvalue:

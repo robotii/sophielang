@@ -7,7 +7,7 @@ class Outer {
   foo {
     class Inner {
       static bar {
-        _field = "nope" // expect error
+        @field = "nope" // expect error
       }
     }
   }

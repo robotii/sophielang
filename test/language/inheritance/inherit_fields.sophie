@@ -1,24 +1,24 @@
 class Foo {
   foo(a, b) {
-    _field1 = a
-    _field2 = b
+    @field1 = a
+    @field2 = b
   }
 
   fooPrint {
-    System.print(_field1)
-    System.print(_field2)
+    System.print(@field1)
+    System.print(@field2)
   }
 }
 
 class Bar is Foo {
   bar(a, b) {
-    _field1 = a
-    _field2 = b
+    @field1 = a
+    @field2 = b
   }
 
   barPrint {
-    System.print(_field1)
-    System.print(_field2)
+    System.print(@field1)
+    System.print(@field2)
   }
 }
 

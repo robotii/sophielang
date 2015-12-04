@@ -115,28 +115,28 @@ namespace Sophie.Core.Library
         + "\n"
         + "class MapSequence is Sequence {\n"
         + "  new(sequence, fn) {\n"
-        + "    _sequence = sequence\n"
-        + "    _fn = fn\n"
+        + "    @sequence = sequence\n"
+        + "    @fn = fn\n"
         + "  }\n"
         + "\n"
-        + "  iterate(iterator) { _sequence.iterate(iterator) }\n"
-        + "  iteratorValue(iterator) { _fn.call(_sequence.iteratorValue(iterator)) }\n"
+        + "  iterate(iterator) { @sequence.iterate(iterator) }\n"
+        + "  iteratorValue(iterator) { @fn.call(@sequence.iteratorValue(iterator)) }\n"
         + "}\n"
         + "\n"
         + "class WhereSequence is Sequence {\n"
         + "  new(sequence, fn) {\n"
-        + "    _sequence = sequence\n"
-        + "    _fn = fn\n"
+        + "    @sequence = sequence\n"
+        + "    @fn = fn\n"
         + "  }\n"
         + "\n"
         + "  iterate(iterator) {\n"
-        + "    while (iterator = _sequence.iterate(iterator)) {\n"
-        + "      if (_fn.call(_sequence.iteratorValue(iterator))) break\n"
+        + "    while (iterator = @sequence.iterate(iterator)) {\n"
+        + "      if (@fn.call(@sequence.iteratorValue(iterator))) break\n"
         + "    }\n"
         + "    return iterator\n"
         + "  }\n"
         + "\n"
-        + "  iteratorValue(iterator) { _sequence.iteratorValue(iterator) }\n"
+        + "  iteratorValue(iterator) { @sequence.iteratorValue(iterator) }\n"
         + "}\n"
         + "\n"
         + "class String is Sequence {}\n"
@@ -180,20 +180,20 @@ namespace Sophie.Core.Library
         + "\n"
         + "class MapKeySequence is Sequence {\n"
         + "  new(map) {\n"
-        + "    _map = map\n"
+        + "    @map = map\n"
         + "  }\n"
         + "\n"
-        + "  iterate(n) { _map.iterate_(n) }\n"
-        + "  iteratorValue(iterator) { _map.keyIteratorValue_(iterator) }\n"
+        + "  iterate(n) { @map.iterate_(n) }\n"
+        + "  iteratorValue(iterator) { @map.keyIteratorValue_(iterator) }\n"
         + "}\n"
         + "\n"
         + "class MapValueSequence is Sequence {\n"
         + "  new(map) {\n"
-        + "    _map = map\n"
+        + "    @map = map\n"
         + "  }\n"
         + "\n"
-        + "  iterate(n) { _map.iterate_(n) }\n"
-        + "  iteratorValue(iterator) { _map.valueIteratorValue_(iterator) }\n"
+        + "  iterate(n) { @map.iterate_(n) }\n"
+        + "  iteratorValue(iterator) { @map.valueIteratorValue_(iterator) }\n"
         + "}\n"
         + "\n"
         + "class Range is Sequence {}\n";
@@ -1298,25 +1298,13 @@ namespace Sophie.Core.Library
 
         static bool prim_num_eqeq(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (stack[argStart + 1].Type == ObjType.Num)
-            {
-                stack[argStart] = Obj.Bool(stack[argStart].Num == (stack[argStart + 1].Num));
-                return true;
-            }
-
-            stack[argStart] = Obj.Bool(false);
+            stack[argStart] = Obj.Bool(stack[argStart + 1].Type == ObjType.Num && stack[argStart].Num == (stack[argStart + 1].Num));
             return true;
         }
 
         static bool prim_num_bangeq(SophieVM vm, Obj[] stack, int argStart)
         {
-            if (stack[argStart + 1].Type == ObjType.Num)
-            {
-                stack[argStart] = Obj.Bool(stack[argStart].Num != stack[argStart + 1].Num);
-                return true;
-            }
-
-            stack[argStart] = Obj.Bool(true);
+            stack[argStart] = Obj.Bool(stack[argStart + 1].Type != ObjType.Num || stack[argStart].Num != stack[argStart + 1].Num);
             return true;
         }
 
@@ -1588,6 +1576,20 @@ namespace Sophie.Core.Library
 
             if (range != null)
                 stack[argStart] = Obj.MakeString(string.Format("{0}{1}{2}", range.From, range.IsInclusive ? ".." : "...", range.To));
+            return true;
+        }
+
+        static bool prim_string_eqeq(SophieVM vm, Obj[] stack, int argStart)
+        {
+            ObjString s1 = stack[argStart + 1] as ObjString;
+            stack[argStart] = Obj.Bool(s1 != null && ((ObjString)stack[argStart]).Str == s1.Str);
+            return true;
+        }
+
+        static bool prim_string_bangeq(SophieVM vm, Obj[] stack, int argStart)
+        {
+            ObjString s1 = stack[argStart + 1] as ObjString;
+            stack[argStart] = Obj.Bool(s1 == null || ((ObjString)stack[argStart]).Str != s1.Str);
             return true;
         }
 
@@ -2090,6 +2092,8 @@ namespace Sophie.Core.Library
             SophieVM.StringClass = (ObjClass)_vm.FindVariable("String");
             _vm.Primitive(SophieVM.StringClass.ClassObj, "fromCodePoint(_)", prim_string_fromCodePoint);
             _vm.Primitive(SophieVM.StringClass.ClassObj, "<instantiate>", prim_string_instantiate);
+            _vm.Primitive(SophieVM.StringClass, "==(_)", prim_string_eqeq);
+            _vm.Primitive(SophieVM.StringClass, "!=(_)", prim_string_bangeq);
             _vm.Primitive(SophieVM.StringClass, "+(_)", prim_string_plus);
             _vm.Primitive(SophieVM.StringClass, "[_]", prim_string_subscript);
             _vm.Primitive(SophieVM.StringClass, "byteAt(_)", prim_string_byteAt);

@@ -1,11 +1,11 @@
 class Toggle {
   new(startState) {
-    _state = startState
+    @state = startState
   }
 
-  value { _state }
+  value { @state }
   activate {
-    _state = !_state
+    @state = !@state
     return this
   }
 }
@@ -13,15 +13,15 @@ class Toggle {
 class NthToggle is Toggle {
   new(startState, maxCounter) {
     super(startState)
-    _countMax = maxCounter
-    _count = 0
+    @countMax = maxCounter
+    @count = 0
   }
 
   activate {
-    _count = _count + 1
-    if (_count >= _countMax) {
+    @count = @count + 1
+    if (@count >= @countMax) {
       super.activate
-      _count = 0
+      @count = 0
     }
 
     return this

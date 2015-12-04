@@ -37,7 +37,7 @@ namespace Sophie.Core.VM
         public SophieVM()
         {
             MethodNames = new List<string>();
-            ObjString name = new ObjString("core");
+            ObjString name = Obj.MakeString("core");
 
             // Implicitly create a "core" module for the built in libraries.
             ObjModule coreModule = new ObjModule(name);
@@ -59,7 +59,7 @@ namespace Sophie.Core.VM
         public SophieLoadModuleFn LoadModuleFn { get; set; }
 
         // Defines [methodValue] as a method on [classObj].
-        private static Obj BindMethod(MethodType methodType, int symbol, ObjClass classObj, Obj methodContainer)
+        private static Obj BindMethod(bool isStatic, int symbol, ObjClass classObj, Obj methodContainer)
         {
             ObjFn methodFn = methodContainer as ObjFn ?? ((ObjClosure)methodContainer).Function;
 
@@ -70,12 +70,11 @@ namespace Sophie.Core.VM
 
             Method method = new Method { MType = MethodType.Block, Obj = methodContainer };
 
-            if (methodType == MethodType.Static)
+            if (isStatic)
                 classObj = classObj.ClassObj;
 
-            //classObj.Methods[symbol] = method;
             classObj.BindMethod(symbol, method);
-            return Obj.Null;
+            return null;
         }
 
         // Creates a string containing an appropriate method not found error for a
@@ -144,7 +143,7 @@ namespace Sophie.Core.VM
             if (source == null)
             {
                 // Couldn't load the module.
-                return new ObjString(string.Format("Could not find module '{0}'.", name));
+                return Obj.MakeString(string.Format("Could not find module '{0}'.", name));
             }
 
             ObjFiber moduleFiber = LoadModule(name, source);
@@ -285,6 +284,18 @@ namespace Sophie.Core.VM
                         if (Fiber.StackTop >= Fiber.Capacity)
                             stack = Fiber.IncreaseStack();
                         stack[Fiber.StackTop++] = Obj.True;
+                        break;
+
+                    case Instruction.Zero:
+                        if (Fiber.StackTop >= Fiber.Capacity)
+                            stack = Fiber.IncreaseStack();
+                        stack[Fiber.StackTop++] = Obj.Zero;
+                        break;
+
+                    case Instruction.One:
+                        if (Fiber.StackTop >= Fiber.Capacity)
+                            stack = Fiber.IncreaseStack();
+                        stack[Fiber.StackTop++] = Obj.One;
                         break;
 
                     case Instruction.Call0:
@@ -667,12 +678,11 @@ namespace Sophie.Core.VM
                             // Use implicit Object superclass if none given.
                             if (stack[Fiber.StackTop - 1] != Obj.Null)
                             {
-                                Obj error = ValidateSuperclass(name, stack[Fiber.StackTop - 1]);
-                                if (error != null)
+                                Fiber.Error = ValidateSuperclass(name, stack[Fiber.StackTop - 1]);
+                                if (Fiber.Error != null)
                                 {
                                     frame.Ip = ip;
-                                    RUNTIME_ERROR(Fiber, error);
-                                    if (Fiber == null)
+                                    if (!HandleRuntimeError())
                                         return false;
                                     /* Load Frame */
                                     frame = Fiber.Frames[Fiber.NumFrames - 1];
@@ -698,8 +708,8 @@ namespace Sophie.Core.VM
                             if (superclass.NumFields + numFields > Compiler.MaxFields)
                             {
                                 frame.Ip = ip;
-                                RUNTIME_ERROR(Fiber, Obj.MakeString(string.Format("Class '{0}' may not have more than 255 fields, including inherited ones.", name)));
-                                if (Fiber == null)
+                                Fiber.Error = Obj.MakeString(string.Format("Class '{0}' may not have more than 255 fields, including inherited ones.", name));
+                                if (!HandleRuntimeError())
                                     return false;
                                 /* Load Frame */
                                 frame = Fiber.Frames[Fiber.NumFrames - 1];
@@ -724,13 +734,12 @@ namespace Sophie.Core.VM
                             ip += 2;
                             ObjClass classObj = stack[Fiber.StackTop - 1] as ObjClass;
                             Obj method = stack[Fiber.StackTop - 2];
-                            MethodType methodType = instruction == Instruction.MethodInstance ? MethodType.None : MethodType.Static;
-                            Obj error = BindMethod(methodType, symbol, classObj, method);
-                            if ((error is ObjString))
+                            bool isStatic = instruction != Instruction.MethodInstance;
+                            Fiber.Error = BindMethod(isStatic, symbol, classObj, method);
+                            if (Fiber.Error != null)
                             {
                                 frame.Ip = ip;
-                                RUNTIME_ERROR(Fiber, error);
-                                if (Fiber == null)
+                                if (!HandleRuntimeError())
                                     return false;
                                 /* Load Frame */
                                 frame = Fiber.Frames[Fiber.NumFrames - 1];
@@ -755,8 +764,8 @@ namespace Sophie.Core.VM
                             if ((result is ObjString))
                             {
                                 frame.Ip = ip;
-                                RUNTIME_ERROR(Fiber, result);
-                                if (Fiber == null)
+                                Fiber.Error = result;
+                                if (!HandleRuntimeError())
                                     return false;
                                 /* Load Frame */
                                 frame = Fiber.Frames[Fiber.NumFrames - 1];
@@ -811,8 +820,8 @@ namespace Sophie.Core.VM
                             else
                             {
                                 frame.Ip = ip;
-                                RUNTIME_ERROR(Fiber, result);
-                                if (Fiber == null)
+                                Fiber.Error = result;
+                                if (!HandleRuntimeError())
                                     return false;
                                 /* Load Frame */
                                 frame = Fiber.Frames[Fiber.NumFrames - 1];
@@ -854,7 +863,7 @@ namespace Sophie.Core.VM
             if (sourcePath.Length == 0) return LoadIntoCore(source);
 
             // TODO: Better module name.
-            Obj name = new ObjString("main");
+            Obj name = Obj.MakeString("main");
 
             ObjFiber f = LoadModule(name, source);
             if (f == null)
@@ -914,33 +923,6 @@ namespace Sophie.Core.VM
         }
 
         /* Dirty Hack */
-        private void RUNTIME_ERROR(ObjFiber f, Obj v)
-        {
-            if (f.Error != null)
-            {
-                Console.Error.WriteLine("Can only fail once.");
-                return;
-            }
-
-            if (f.CallerIsTrying)
-            {
-                f.Caller.SetReturnValue(v);
-                Fiber = f.Caller;
-                f.Error = v as ObjString;
-                return;
-            }
-            Fiber = null;
-
-            // TODO: Fix this so that there is no dependancy on the console
-            if (v == null || v as ObjString == null)
-            {
-                v = new ObjString("Error message must be a string.");
-            }
-            f.Error = v as ObjString;
-            Console.Error.WriteLine(v as ObjString);
-        }
-
-        /* Dirty Hack */
         private bool HandleRuntimeError()
         {
             ObjFiber f = Fiber;
@@ -997,13 +979,13 @@ namespace Sophie.Core.VM
 
             if (fn == null)
             {
-                Fiber.Error = (ObjString)Obj.MakeString("Receiver must be a function or closure.");
+                Fiber.Error = Obj.MakeString("Receiver must be a function or closure.");
                 return false;
             }
 
             if (numArgs - 1 < fn.Arity)
             {
-                Fiber.Error = (ObjString)Obj.MakeString("Function expects more arguments.");
+                Fiber.Error = Obj.MakeString("Function expects more arguments.");
                 return false;
             }
 

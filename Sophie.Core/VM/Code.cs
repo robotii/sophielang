@@ -32,6 +32,12 @@
         // Push true onto the stack.
         True,
 
+        // Push zero onto the stack
+        Zero,
+
+        // Push 1 onto the stack
+        One,
+
         // Note: The compiler assumes the following _STORE instructions always
         // immediately follow their corresponding _LOAD ones.
 

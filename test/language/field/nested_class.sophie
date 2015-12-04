@@ -1,17 +1,17 @@
 class Outer {
   method {
-    _field = "outer"
-    System.print(_field) // expect: outer
+    @field = "outer"
+    System.print(@field) // expect: outer
 
     class Inner {
       method {
-        _field = "inner"
-        System.print(_field) // expect: inner
+        @field = "inner"
+        System.print(@field) // expect: inner
       }
     }
 
     (new Inner).method
-    System.print(_field) // expect: outer
+    System.print(@field) // expect: outer
   }
 }
 

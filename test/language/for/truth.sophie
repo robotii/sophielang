@@ -1,6 +1,6 @@
 class Iter {
-  new(value) { _value = value }
-  iterate(iterator) { _value }
+  new(value) { @value = value }
+  iterate(iterator) { @value }
   iteratorValue(iterator) { "value" }
 }
 

@@ -2,21 +2,21 @@
 
 class Tree {
   new(item, depth) {
-    _item = item
+    @item = item
     if (depth > 0) {
       var item2 = item + item
       depth = depth - 1
-      _left = new Tree(item2 - 1, depth)
-      _right = new Tree(item2, depth)
+      @left = new Tree(item2 - 1, depth)
+      @right = new Tree(item2, depth)
     }
   }
 
   check {
-    if (null == _left) {
-      return _item
+    if (null == @left) {
+      return @item
     }
 
-    return _item + _left.check - _right.check
+    return @item + @left.check - @right.check
   }
 }
 

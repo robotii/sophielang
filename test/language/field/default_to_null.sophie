@@ -1,5 +1,5 @@
 class Foo {
-  write { System.print(_field) }
+  write { System.print(@field) }
 }
 
 (new Foo).write // expect: null

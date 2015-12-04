@@ -3,7 +3,7 @@ using Sophie.Core.VM;
 
 namespace Sophie.Core.Objects
 {
-    public class ObjMap : Obj
+    public sealed class ObjMap : Obj
     {
 
         // Pointer to a contiguous array of [capacity] entries.

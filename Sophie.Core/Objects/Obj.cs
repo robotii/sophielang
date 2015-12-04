@@ -22,6 +22,8 @@ namespace Sophie.Core.Objects
         public static readonly Obj Null = new Obj(ObjType.Null);
         public static readonly Obj False = new Obj(ObjType.False);
         public static readonly Obj True = new Obj(ObjType.True);
+        public static readonly Obj Zero = new Obj(0.0);
+        public static readonly Obj One = new Obj(1.0);
         public static readonly Obj Undefined = new Obj(ObjType.Undefined);
 
         // The object's class.
@@ -45,7 +47,7 @@ namespace Sophie.Core.Objects
             Num = n;
         }
 
-        public static Obj MakeString(string s)
+        public static ObjString MakeString(string s)
         {
             return new ObjString(s);
         }

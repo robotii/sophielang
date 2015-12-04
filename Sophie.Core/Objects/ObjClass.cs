@@ -28,7 +28,7 @@ namespace Sophie.Core.Objects
             Name = name;
 
             // Create the metaclass.
-            ObjString metaclassName = new ObjString(name + " metaclass");
+            ObjString metaclassName = MakeString(name + " metaclass");
 
             ObjClass metaclass = new ObjClass(0, metaclassName) { ClassObj = ClassClass };
 
@@ -66,10 +66,6 @@ namespace Sophie.Core.Objects
             NumFields += sc.NumFields;
 
             // Inherit methods from its superclass.
-            //foreach (KeyValuePair<int, Method> m in sc.Methods)
-            //{
-            //    BindMethod(m.Key, m.Value);
-            //}
             Methods = new Method[sc.Methods.Length];
             sc.Methods.CopyTo(Methods,0);
         }
@@ -94,22 +90,6 @@ namespace Sophie.Core.Objects
         }
     }
 
-    public enum PrimitiveResult
-    {
-        // A normal value has been returned.
-        Value,
-
-        // A runtime error occurred.
-        Error,
-
-        // A new callframe has been pushed.
-        Call,
-
-        // A fiber is being switched to.
-        RunFiber
-
-    };
-
     public delegate bool Primitive(SophieVM vm, Obj[] stack, int argStart);
 
     public enum MethodType
@@ -120,11 +100,6 @@ namespace Sophie.Core.Objects
 
         // A normal user-defined method.
         Block,
-
-        // No method for the given symbol.
-        None,
-
-        Static,
 
         // Special call type
         Call

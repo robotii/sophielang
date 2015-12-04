@@ -1,8 +1,8 @@
 class Foo {
-  new(value) { _value = value }
-  toString { _value }
+  new(value) { @value = value }
+  toString { @value }
   bar=(value) {
-    _value = value
+    @value = value
     return value
   }
 }

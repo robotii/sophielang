@@ -1,27 +1,27 @@
 class Foo {
-  new { _field = "Foo field" }
+  new { @field = "Foo field" }
 
   closeOverFooGet {
-    return new Fn { new Fn { _field } }
+    return new Fn { new Fn { @field } }
   }
 
   closeOverFooSet {
-    return new Fn { new Fn { _field = "new foo value" } }
+    return new Fn { new Fn { @field = "new foo value" } }
   }
 }
 
 class Bar is Foo {
   new {
     super
-    _field = "Bar field"
+    @field = "Bar field"
   }
 
   closeOverBarGet {
-    return new Fn { new Fn { _field } }
+    return new Fn { new Fn { @field } }
   }
 
   closeOverBarSet {
-    return new Fn { new Fn { _field = "new bar value" } }
+    return new Fn { new Fn { @field = "new bar value" } }
   }
 }
 

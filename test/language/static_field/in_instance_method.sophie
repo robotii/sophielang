@@ -1,18 +1,18 @@
 class Foo {
   set(a, b, c, d, e) {
-    __a = a
-    __b = b
-    __c = c
-    __d = d
-    __e = e
+    @@a = a
+    @@b = b
+    @@c = c
+    @@d = d
+    @@e = e
   }
 
   write {
-    System.print(__a)
-    System.print(__b)
-    System.print(__c)
-    System.print(__d)
-    System.print(__e)
+    System.print(@@a)
+    System.print(@@b)
+    System.print(@@c)
+    System.print(@@d)
+    System.print(@@e)
   }
 }
 

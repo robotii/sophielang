@@ -5,7 +5,7 @@ using Sophie.Core.VM;
 
 namespace Sophie.Core.Objects
 {
-    public class ObjString : Obj
+    public sealed class ObjString : Obj
     {
         private static readonly List<ObjString> Strings = new List<ObjString>();
         private static bool _initCompleted;

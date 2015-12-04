@@ -1,5 +1,5 @@
 class Foo {
   static bar {
-    new Fn { _field = "wat" } // expect error
+    new Fn { @field = "wat" } // expect error
   }
 }

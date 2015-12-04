@@ -51,14 +51,14 @@ var ORDERED = null
 // this class, so == can be used for value comparison.
 class Strength {
   new(value, name) {
-    _value = value
-    _name = name
+    @value = value
+    @name = name
   }
 
-  value { _value }
-  name { _name }
+  value { @value }
+  name { @name }
 
-  nextWeaker { ORDERED[_value] }
+  nextWeaker { ORDERED[@value] }
 
   static stronger(s1, s2) { s1.value < s2.value }
   static weaker(s1, s2) { s1.value > s2.value }
@@ -83,10 +83,10 @@ var ThePlanner
 
 class Constraint {
   new(strength) {
-    _strength = strength
+    @strength = strength
   }
 
-  strength { _strength }
+  strength { @strength }
 
   // Activate this constraint and attempt to satisfy it.
   addConstraint {
@@ -102,7 +102,7 @@ class Constraint {
   satisfy(mark) {
     chooseMethod(mark)
     if (!isSatisfied) {
-      if (_strength == REQUIRED) {
+      if (@strength == REQUIRED) {
         System.print("Could not satisfy a required constraint!")
       }
       return null
@@ -133,52 +133,52 @@ class Constraint {
 class UnaryConstraint is Constraint {
   new(myOutput, strength) {
     super(strength)
-    _satisfied = false
-    _myOutput = myOutput
+    @satisfied = false
+    @myOutput = myOutput
     addConstraint
   }
 
   // Adds this constraint to the constraint graph.
   addToGraph {
-    _myOutput.addConstraint(this)
-    _satisfied = false
+    @myOutput.addConstraint(this)
+    @satisfied = false
   }
 
   // Decides if this constraint can be satisfied and records that decision.
   chooseMethod(mark) {
-    _satisfied = (_myOutput.mark != mark) &&
-        Strength.stronger(strength, _myOutput.walkStrength)
+    @satisfied = (@myOutput.mark != mark) &&
+        Strength.stronger(strength, @myOutput.walkStrength)
   }
 
   // Returns true if this constraint is satisfied in the current solution.
-  isSatisfied { _satisfied }
+  isSatisfied { @satisfied }
 
   markInputs(mark) {
     // has no inputs.
   }
 
   // Returns the current output variable.
-  output { _myOutput }
+  output { @myOutput }
 
   // Calculate the walkabout strength, the stay flag, and, if it is
   // 'stay', the value for the current output of this constraint. Assume
   // this constraint is satisfied.
   recalculate {
-    _myOutput.walkStrength = strength
-    _myOutput.stay = !isInput
-    if (_myOutput.stay) execute // Stay optimization.
+    @myOutput.walkStrength = strength
+    @myOutput.stay = !isInput
+    if (@myOutput.stay) execute // Stay optimization.
   }
 
   // Records that this constraint is unsatisfied.
   markUnsatisfied {
-    _satisfied = false
+    @satisfied = false
   }
 
   inputsKnown(mark) { true }
 
   removeFromGraph {
-    if (_myOutput != null) _myOutput.removeConstraint(this)
-    _satisfied = false
+    if (@myOutput != null) @myOutput.removeConstraint(this)
+    @satisfied = false
   }
 }
 
@@ -221,62 +221,62 @@ var BACKWARD = 0
 class BinaryConstraint is Constraint {
   new(v1, v2, strength) {
     super(strength)
-    _v1 = v1
-    _v2 = v2
-    _direction = NONE
+    @v1 = v1
+    @v2 = v2
+    @direction = NONE
     addConstraint
   }
 
-  direction { _direction }
-  v1 { _v1 }
-  v2 { _v2 }
+  direction { @direction }
+  v1 { @v1 }
+  v2 { @v2 }
 
   // Decides if this constraint can be satisfied and which way it
   // should flow based on the relative strength of the variables related,
   // and record that decision.
   chooseMethod(mark) {
-    if (_v1.mark == mark) {
-      if (_v2.mark != mark &&
-          Strength.stronger(strength, _v2.walkStrength)) {
-        _direction = FORWARD
+    if (@v1.mark == mark) {
+      if (@v2.mark != mark &&
+          Strength.stronger(strength, @v2.walkStrength)) {
+        @direction = FORWARD
       } else {
-        _direction = NONE
+        @direction = NONE
       }
     }
 
-    if (_v2.mark == mark) {
-      if (_v1.mark != mark &&
-          Strength.stronger(strength, _v1.walkStrength)) {
-        _direction = BACKWARD
+    if (@v2.mark == mark) {
+      if (@v1.mark != mark &&
+          Strength.stronger(strength, @v1.walkStrength)) {
+        @direction = BACKWARD
       } else {
-        _direction = NONE
+        @direction = NONE
       }
     }
 
-    if (Strength.weaker(_v1.walkStrength, _v2.walkStrength)) {
-      if (Strength.stronger(strength, _v1.walkStrength)) {
-        _direction = BACKWARD
+    if (Strength.weaker(@v1.walkStrength, @v2.walkStrength)) {
+      if (Strength.stronger(strength, @v1.walkStrength)) {
+        @direction = BACKWARD
       } else {
-        _direction = NONE
+        @direction = NONE
       }
     } else {
-      if (Strength.stronger(strength, _v2.walkStrength)) {
-        _direction = FORWARD
+      if (Strength.stronger(strength, @v2.walkStrength)) {
+        @direction = FORWARD
       } else {
-        _direction = BACKWARD
+        @direction = BACKWARD
       }
     }
   }
 
   // Add this constraint to the constraint graph.
   addToGraph {
-    _v1.addConstraint(this)
-    _v2.addConstraint(this)
-    _direction = NONE
+    @v1.addConstraint(this)
+    @v2.addConstraint(this)
+    @direction = NONE
   }
 
   // Answer true if this constraint is satisfied in the current solution.
-  isSatisfied { _direction != NONE }
+  isSatisfied { @direction != NONE }
 
   // Mark the input variable with the given mark.
   markInputs(mark) {
@@ -285,14 +285,14 @@ class BinaryConstraint is Constraint {
 
   // Returns the current input variable
   input {
-    if (_direction == FORWARD) return _v1
-    return _v2
+    if (@direction == FORWARD) return @v1
+    return @v2
   }
 
   // Returns the current output variable.
   output {
-    if (_direction == FORWARD) return _v2
-    return _v1
+    if (@direction == FORWARD) return @v2
+    return @v1
   }
 
   // Calculate the walkabout strength, the stay flag, and, if it is
@@ -308,7 +308,7 @@ class BinaryConstraint is Constraint {
 
   // Record the fact that this constraint is unsatisfied.
   markUnsatisfied {
-    _direction = NONE
+    @direction = NONE
   }
 
   inputsKnown(mark) {
@@ -317,9 +317,9 @@ class BinaryConstraint is Constraint {
   }
 
   removeFromGraph {
-    if (_v1 != null) _v1.removeConstraint(this)
-    if (_v2 != null) _v2.removeConstraint(this)
-    _direction = NONE
+    if (@v1 != null) @v1.removeConstraint(this)
+    if (@v2 != null) @v2.removeConstraint(this)
+    @direction = NONE
   }
 }
 
@@ -329,36 +329,36 @@ class BinaryConstraint is Constraint {
 // read-only.
 class ScaleConstraint is BinaryConstraint {
   new(src, scale, offset, dest, strength) {
-    _scale = scale
-    _offset = offset
+    @scale = scale
+    @offset = offset
     super(src, dest, strength)
   }
 
   // Adds this constraint to the constraint graph.
   addToGraph {
     super.addToGraph
-    _scale.addConstraint(this)
-    _offset.addConstraint(this)
+    @scale.addConstraint(this)
+    @offset.addConstraint(this)
   }
 
   removeFromGraph {
     super.removeFromGraph
-    if (_scale != null) _scale.removeConstraint(this)
-    if (_offset != null) _offset.removeConstraint(this)
+    if (@scale != null) @scale.removeConstraint(this)
+    if (@offset != null) @offset.removeConstraint(this)
   }
 
   markInputs(mark) {
     super.markInputs(mark)
-    _scale.mark = _offset.mark = mark
+    @scale.mark = @offset.mark = mark
   }
 
   // Enforce this constraint. Assume that it is satisfied.
   execute {
     if (direction == FORWARD) {
-      v2.value = v1.value * _scale.value + _offset.value
+      v2.value = v1.value * @scale.value + @offset.value
     } else {
       // TODO: Is this the same semantics as ~/?
-      v1.value = ((v2.value - _offset.value) / _scale.value).floor
+      v1.value = ((v2.value - @offset.value) / @scale.value).floor
     }
   }
 
@@ -369,7 +369,7 @@ class ScaleConstraint is BinaryConstraint {
     var ihn = input
     var out = output
     out.walkStrength = Strength.weakest(strength, ihn.walkStrength)
-    out.stay = ihn.stay && _scale.stay && _offset.stay
+    out.stay = ihn.stay && @scale.stay && @offset.stay
     if (out.stay) execute
   }
 }
@@ -392,37 +392,37 @@ class EqualityConstraint is BinaryConstraint {
 // constraint solver.
 class Variable {
   new(name, value) {
-    _constraints = []
-    _determinedBy = null
-    _mark = 0
-    _walkStrength = WEAKEST
-    _stay = true
-    _name = name
-    _value = value
+    @constraints = []
+    @determinedBy = null
+    @mark = 0
+    @walkStrength = WEAKEST
+    @stay = true
+    @name = name
+    @value = value
   }
 
-  constraints { _constraints }
-  determinedBy { _determinedBy }
-  determinedBy=(value) { _determinedBy = value }
-  mark { _mark }
-  mark=(value) { _mark = value }
-  walkStrength { _walkStrength }
-  walkStrength=(value) { _walkStrength = value }
-  stay { _stay }
-  stay=(value) { _stay = value }
-  value { _value }
-  value=(newValue) { _value = newValue }
+  constraints { @constraints }
+  determinedBy { @determinedBy }
+  determinedBy=(value) { @determinedBy = value }
+  mark { @mark }
+  mark=(value) { @mark = value }
+  walkStrength { @walkStrength }
+  walkStrength=(value) { @walkStrength = value }
+  stay { @stay }
+  stay=(value) { @stay = value }
+  value { @value }
+  value=(newValue) { @value = newValue }
 
   // Add the given constraint to the set of all constraints that refer
   // this variable.
   addConstraint(constraint) {
-    _constraints.add(constraint)
+    @constraints.add(constraint)
   }
 
   // Removes all traces of c from this variable.
   removeConstraint(constraint) {
-    _constraints = _constraints.where { |c| c != constraint }
-    if (_determinedBy == constraint) _determinedBy = null
+    @constraints = @constraints.where { |c| c != constraint }
+    if (@determinedBy == constraint) @determinedBy = null
   }
 }
 
@@ -431,17 +431,17 @@ class Variable {
 // one or more changing inputs.
 class Plan {
   new {
-    _list = []
+    @list = []
   }
 
   addConstraint(constraint) {
-    _list.add(constraint)
+    @list.add(constraint)
   }
 
-  size { _list.count }
+  size { @list.count }
 
   execute {
-    for (constraint in _list) {
+    for (constraint in @list) {
       constraint.execute
     }
   }
@@ -449,7 +449,7 @@ class Plan {
 
 class Planner {
   new {
-    _currentMark = 0
+    @currentMark = 0
   }
 
   // Attempt to satisfy the given constraint and, if successful,
@@ -498,8 +498,8 @@ class Planner {
 
   // Select a previously unused mark value.
   newMark {
-    _currentMark = _currentMark + 1
-    return _currentMark
+    @currentMark = @currentMark + 1
+    return @currentMark
   }
 
   // Extract a plan for resatisfaction starting from the given source

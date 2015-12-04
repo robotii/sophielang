@@ -1,12 +1,12 @@
 class Foo {
-  new { _field = "Foo field" }
+  new { @field = "Foo field" }
 
   closeOverGet {
-    return new Fn { _field }
+    return new Fn { @field }
   }
 
   closeOverSet {
-    return new Fn { _field = "new value" }
+    return new Fn { @field = "new value" }
   }
 }
 

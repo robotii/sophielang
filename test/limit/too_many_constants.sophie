@@ -1,5 +1,4 @@
 var f = new Fn {
-  1
   2
   3
   4
@@ -65534,6 +65533,7 @@ var f = new Fn {
   65533
   65534
   65535
-  66536
-  System.print(65537) // expect error
+  65536
+  65537
+  System.print(65538) // expect error
 }
