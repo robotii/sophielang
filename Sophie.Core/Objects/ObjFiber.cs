@@ -44,7 +44,7 @@ namespace Sophie.Core.Objects
 
         public int NumFrames;
 
-        public ObjString Error;
+        public Obj Error;
 
         public bool CallerIsTrying;
 

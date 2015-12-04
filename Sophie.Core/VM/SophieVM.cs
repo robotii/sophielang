@@ -80,9 +80,9 @@ namespace Sophie.Core.VM
 
         // Creates a string containing an appropriate method not found error for a
         // method with [symbol] on [classObj].
-        static Obj MethodNotFound(SophieVM vm, ObjClass classObj, int symbol)
+        static void MethodNotFound(SophieVM vm, ObjClass classObj, int symbol)
         {
-            return new ObjString(string.Format("{0} does not implement '{1}'.", classObj.Name, vm.MethodNames[symbol]));
+            vm.Fiber.Error = Obj.MakeString(string.Format("{0} does not implement '{1}'.", classObj.Name, vm.MethodNames[symbol]));
         }
 
         // Looks up the previously loaded module with [name].
@@ -323,7 +323,7 @@ namespace Sophie.Core.VM
                     case Instruction.Super15:
                     case Instruction.Super16:
                         {
-                            int numArgs = (int)instruction & 63;
+                            int numArgs = instruction - (instruction >= Instruction.Super0 ? Instruction.Super0 : Instruction.Call0) + 1;
                             int symbol = (bytecode[ip] << 8) + bytecode[ip + 1];
                             ip += 2;
 
@@ -335,21 +335,13 @@ namespace Sophie.Core.VM
                             if (instruction < Instruction.Super0)
                             {
                                 if (receiver.Type == ObjType.Obj)
-                                {
                                     classObj = receiver.ClassObj;
-                                }
                                 else if (receiver.Type == ObjType.Num)
-                                {
                                     classObj = NumClass;
-                                }
                                 else if (receiver == Obj.True || receiver == Obj.False)
-                                {
                                     classObj = BoolClass;
-                                }
                                 else
-                                {
                                     classObj = NullClass;
-                                }
                             }
                             else
                             {
@@ -358,101 +350,91 @@ namespace Sophie.Core.VM
                                 ip += 2;
                             }
 
-                            Method[] methods = classObj.Methods;
-
                             // If the class's method table doesn't include the symbol, bail.
-                            if (symbol < methods.Length)
+                            Method method = symbol < classObj.Methods.Length ? classObj.Methods[symbol] : null;
+
+                            if (method == null)
                             {
-                                Method method = methods[symbol];
-
-                                if (method != null)
-                                {
-                                    if (method.MType == MethodType.Primitive)
-                                    {
-                                        // After calling this, the result will be in the first arg slot.
-                                        PrimitiveResult result = method.Primitive(this, stack, argStart);
-
-                                        if (result == PrimitiveResult.Value)
-                                        {
-                                            Fiber.StackTop = argStart + 1;
-                                            break;
-                                        }
-
-                                        frame.Ip = ip;
-
-                                        switch (result)
-                                        {
-                                            case PrimitiveResult.RunFiber:
-
-                                                // If we don't have a fiber to switch to, stop interpreting.
-                                                if (stack[argStart] == Obj.Null) return true;
-
-                                                Fiber = stack[argStart] as ObjFiber;
-                                                /* Load Frame */
-                                                frame = Fiber.Frames[Fiber.NumFrames - 1];
-                                                ip = frame.Ip;
-                                                stackStart = frame.StackStart;
-                                                stack = Fiber.Stack;
-                                                fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
-                                                bytecode = fn.Bytecode;
-                                                break;
-
-                                            case PrimitiveResult.Call:
-                                                Fiber.Frames.Add(frame = new CallFrame { Fn = receiver, StackStart = argStart, Ip = 0 });
-                                                Fiber.NumFrames++;
-
-                                                /* Load Frame */
-                                                ip = 0;
-                                                stackStart = argStart;
-                                                fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
-                                                bytecode = fn.Bytecode;
-                                                break;
-
-                                            case PrimitiveResult.Error:
-                                                RUNTIME_ERROR(Fiber, stack[argStart]);
-                                                if (Fiber == null)
-                                                    return false;
-                                                frame = Fiber.Frames[Fiber.NumFrames - 1];
-                                                ip = frame.Ip;
-                                                stackStart = frame.StackStart;
-                                                stack = Fiber.Stack;
-                                                fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
-                                                bytecode = fn.Bytecode;
-                                                break;
-                                        }
-                                        break;
-                                    }
-
-                                    if (method.MType == MethodType.Block)
-                                    {
-                                        Obj mObj = method.Obj;
-                                        frame.Ip = ip;
-                                        Fiber.Frames.Add(frame = new CallFrame { Fn = mObj, StackStart = argStart, Ip = 0 });
-                                        Fiber.NumFrames++;
-                                        /* Load Frame */
-                                        ip = 0;
-                                        stackStart = argStart;
-                                        fn = (mObj as ObjFn) ?? (mObj as ObjClosure).Function;
-                                        bytecode = fn.Bytecode;
-                                        break;
-                                    }
-                                }
+                                /* Method not found */
+                                frame.Ip = ip;
+                                MethodNotFound(this, classObj, symbol);
+                                if (!HandleRuntimeError())
+                                    return false;
+                                frame = Fiber.Frames[Fiber.NumFrames - 1];
+                                ip = frame.Ip;
+                                stackStart = frame.StackStart;
+                                stack = Fiber.Stack;
+                                fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
+                                bytecode = fn.Bytecode;
+                                break;
                             }
 
-                            /* Method not found */
-                            frame.Ip = ip;
-                            RUNTIME_ERROR(Fiber, MethodNotFound(this, classObj, symbol));
-                            if (Fiber == null)
-                                return false;
-                            frame = Fiber.Frames[Fiber.NumFrames - 1];
-                            ip = frame.Ip;
-                            stackStart = frame.StackStart;
-                            stack = Fiber.Stack;
-                            fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
-                            bytecode = fn.Bytecode;
+                            if (method.MType == MethodType.Primitive)
+                            {
+                                // After calling this, the result will be in the first arg slot.
+                                if (method.Primitive(this, stack, argStart))
+                                {
+                                    Fiber.StackTop = argStart + 1;
+                                }
+                                else
+                                {
+                                    frame.Ip = ip;
 
+                                    if (Fiber.Error != null && Fiber.Error != Obj.Null)
+                                    {
+                                        if (!HandleRuntimeError())
+                                            return false;
+                                    }
+                                    else
+                                    {
+                                        // If we don't have a fiber to switch to, stop interpreting.
+                                        if (stack[argStart] == Obj.Null)
+                                            return true;
+                                        Fiber = stack[argStart] as ObjFiber;
+                                        if (Fiber == null)
+                                            return false;
+                                    }
+
+                                    /* Load Frame */
+                                    frame = Fiber.Frames[Fiber.NumFrames - 1];
+                                    ip = frame.Ip;
+                                    stackStart = frame.StackStart;
+                                    stack = Fiber.Stack;
+                                    fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
+                                    bytecode = fn.Bytecode;
+                                }
+                                break;
+                            }
+
+                            frame.Ip = ip;
+
+                            if (method.MType == MethodType.Block)
+                            {
+                                receiver = method.Obj;
+                            }
+                            else if (!CheckArity(stack, numArgs, argStart))
+                            {
+                                if (!HandleRuntimeError())
+                                    return false;
+
+                                frame = Fiber.Frames[Fiber.NumFrames - 1];
+                                ip = frame.Ip;
+                                stackStart = frame.StackStart;
+                                stack = Fiber.Stack;
+                                fn = (frame.Fn as ObjFn) ?? (frame.Fn as ObjClosure).Function;
+                                bytecode = fn.Bytecode;
+                                break;
+                            }
+
+                            Fiber.Frames.Add(frame = new CallFrame { Fn = receiver, StackStart = argStart, Ip = 0 });
+                            Fiber.NumFrames++;
+                            /* Load Frame */
+                            ip = 0;
+                            stackStart = argStart;
+                            fn = (receiver as ObjFn) ?? (receiver as ObjClosure).Function;
+                            bytecode = fn.Bytecode;
+                            break;
                         }
-                        break;
 
                     case Instruction.StoreLocal:
                         index = stackStart + bytecode[ip++];
@@ -951,6 +933,27 @@ namespace Sophie.Core.VM
             Console.Error.WriteLine(v as ObjString);
         }
 
+        /* Dirty Hack */
+        private bool HandleRuntimeError()
+        {
+            ObjFiber f = Fiber;
+            if (f.CallerIsTrying)
+            {
+                f.Caller.SetReturnValue(f.Error);
+                Fiber = f.Caller;
+                return true;
+            }
+            Fiber = null;
+
+            // TODO: Fix this so that there is no dependancy on the console
+            if (!(f.Error is ObjString))
+            {
+                f.Error = Obj.MakeString("Error message must be a string.");
+            }
+            Console.Error.WriteLine(f.Error as ObjString);
+            return false;
+        }
+
         /* Anotehr Dirty Hack */
         public void Primitive(ObjClass objClass, string s, Primitive func)
         {
@@ -961,8 +964,43 @@ namespace Sophie.Core.VM
             int symbol = MethodNames.IndexOf(s);
 
             Method m = new Method { Primitive = func, MType = MethodType.Primitive };
-            //objClass.BindMethod(symbol, m);
             objClass.BindMethod(symbol, m);
+        }
+
+        public void Call(ObjClass objClass, string s)
+        {
+            if (!MethodNames.Contains(s))
+            {
+                MethodNames.Add(s);
+            }
+            int symbol = MethodNames.IndexOf(s);
+
+            objClass.BindMethod(symbol, new Method { MType = MethodType.Call });
+        }
+
+        bool CheckArity(Obj[] args, int numArgs, int stackStart)
+        {
+            ObjFn fn = args[stackStart] as ObjFn;
+            ObjClosure c = args[stackStart] as ObjClosure;
+
+            if (c != null)
+            {
+                fn = c.Function;
+            }
+
+            if (fn == null)
+            {
+                Fiber.Error = (ObjString)Obj.MakeString("Receiver must be a function or closure.");
+                return false;
+            }
+
+            if (numArgs - 1 < fn.Arity)
+            {
+                Fiber.Error = (ObjString)Obj.MakeString("Function expects more arguments.");
+                return false;
+            }
+
+            return true;
         }
 
     }

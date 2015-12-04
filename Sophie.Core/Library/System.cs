@@ -105,7 +105,7 @@ namespace Sophie.Core.Library
         + "\n"
         + "}\n";
 
-        static PrimitiveResult WriteString(SophieVM vm, Obj[] stack, int argStart)
+        static bool WriteString(SophieVM vm, Obj[] stack, int argStart)
         {
             if (stack[argStart + 1] != null && stack[argStart + 1].Type == ObjType.Obj)
             {
@@ -113,29 +113,29 @@ namespace Sophie.Core.Library
                 Console.Write(s);
             }
             stack[argStart] = Obj.Null;
-            return PrimitiveResult.Value;
+            return true;
         }
 
-        static PrimitiveResult Read(SophieVM vm, Obj[] stack, int argStart)
+        static bool Read(SophieVM vm, Obj[] stack, int argStart)
         {
             stack[argStart] = Obj.MakeString(Console.ReadLine());
             if (((ObjString)stack[argStart]).Str == "")
             {
                 stack[argStart] = Obj.Null;
             }
-            return PrimitiveResult.Value;
+            return true;
         }
 
-        static PrimitiveResult Clock(SophieVM vm, Obj[] stack, int argStart)
+        static bool Clock(SophieVM vm, Obj[] stack, int argStart)
         {
             stack[argStart] = new Obj((double)DateTime.Now.Ticks / 10000000);
-            return PrimitiveResult.Value;
+            return true;
         }
 
-        static PrimitiveResult Time(SophieVM vm, Obj[] stack, int argStart)
+        static bool Time(SophieVM vm, Obj[] stack, int argStart)
         {
             stack[argStart] = new Obj((double)DateTime.Now.Ticks / 10000000);
-            return PrimitiveResult.Value;
+            return true;
         }
 
         public static void LoadSystemLibrary(SophieVM vm)

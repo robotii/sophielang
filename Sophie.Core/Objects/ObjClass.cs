@@ -110,7 +110,7 @@ namespace Sophie.Core.Objects
 
     };
 
-    public delegate PrimitiveResult Primitive(SophieVM vm, Obj[] stack, int argStart);
+    public delegate bool Primitive(SophieVM vm, Obj[] stack, int argStart);
 
     public enum MethodType
     {
